@@ -167,7 +167,7 @@ namespace RaceLib
                 if (EventManager.Event.PrimaryTimingSystemLocation == PrimaryTimingSystemLocation.Holeshot)
                     raceLaps++;
 
-                if (laps.Length == raceLaps) 
+                if (laps.Length == raceLaps + pilot.Handicap) 
                 {
                     if (laps.TotalTime() < plr.GetBestRaceTime().TotalTime())
                         return true;

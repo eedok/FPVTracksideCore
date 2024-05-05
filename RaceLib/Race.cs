@@ -531,7 +531,7 @@ namespace RaceLib
         {
             lock (Laps)
             {
-                return Laps.Where(l => l.Pilot == p && l.Detection.Valid && l.Detection.LapNumber <= TargetLaps).OrderByDescending(l => l.End).FirstOrDefault();
+                return Laps.Where(l => l.Pilot == p && l.Detection.Valid && l.Detection.LapNumber <= TargetLaps + l.Pilot.Handicap).OrderByDescending(l => l.End).FirstOrDefault();
             }
         }
 
@@ -605,7 +605,7 @@ namespace RaceLib
 
                 if (Type == EventTypes.Race)
                 {
-                    laps = laps.Where(l => l.Number <= TargetLaps);
+                    laps = laps.Where(l => l.Number <= (TargetLaps + l.Pilot.Handicap));
                 }
 
                 return laps.ToArray();

@@ -376,7 +376,7 @@ namespace RaceLib
             if (PointsSettings.DNFForUnfinishedRaces && race.Started)
             {
                 int validLaps = race.GetValidLapsCount(pilot, false);
-                if (validLaps < race.TargetLaps)
+                if (validLaps < race.TargetLaps + pilot.Handicap)
                 {
                     return true;
                 }

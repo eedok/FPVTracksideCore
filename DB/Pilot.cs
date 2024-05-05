@@ -32,6 +32,8 @@ namespace DB
 
         public string PhotoPath { get; set; }
 
+        public int Handicap { get; set; }
+
         public Pilot() { }
 
         public Pilot(RaceLib.Pilot obj)

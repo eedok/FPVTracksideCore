@@ -741,12 +741,12 @@ namespace Sound
                         parameters.Priority = LapNumberToPriority(lap.Detection, position);
 
                         // don't read out laps after the end of the race.
-                        if (lap.Number > lap.Race.TargetLaps && eventManager.RaceManager.RaceType == EventTypes.Race)
+                        if (lap.Number > (lap.Race.TargetLaps + lap.Pilot.Handicap)  && eventManager.RaceManager.RaceType == EventTypes.Race)
                             return;
 
                         parameters.Add(SpeechParameters.Types.position, position);
 
-                        if (lap.Number == lap.Race.TargetLaps)
+                        if (lap.Number == lap.Race.TargetLaps + lap.Pilot.Handicap)
                         {
                             parameters.Priority = 1000;
                             parameters.SecondsExpiry = 30;

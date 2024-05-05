@@ -63,6 +63,9 @@ namespace RaceLib
         [Category("Advanced")]
         public string PhotoPath { get; set; }
 
+        [Category("Advanced")]
+        public int Handicap { get; set; }
+
         public static Pilot CreateFromName(string name)
         {
             Pilot pilot = new Pilot() { Name = name };
@@ -80,6 +83,7 @@ namespace RaceLib
         {
             PracticePilot = false;
             TimingSensitivityPercent = 100;
+            Handicap = 0;
         }
 
         public bool HasFinished(EventManager eventManager)
@@ -110,7 +114,7 @@ namespace RaceLib
                 if (currentRace.Type != EventTypes.Race)
                     return false;
 
-                if (currentRace.GetValidLapsCount(this, false) >= currentRace.TargetLaps)
+                if (currentRace.GetValidLapsCount(this, false) >= currentRace.TargetLaps + this.Handicap)
                 {
                     return true;
                 }

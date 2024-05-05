@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using Timing;
@@ -61,7 +62,7 @@ namespace RaceLib
 
         public override string ToString()
         {
-            return "Detection " + Pilot.Name + " L" + LapNumber + " I" + TimingSystemIndex + " RS" + RaceSector + " T" + Time.ToLogFormat() + " s" + RaceSectorCalculator(LapNumber, TimingSystemIndex);
+            return "Detection " + Pilot.Name + " L" + (LapNumber - Pilot.Handicap) + " I" + TimingSystemIndex + " RS" + RaceSector + " T" + Time.ToLogFormat() + " s" + RaceSectorCalculator((LapNumber - Pilot.Handicap), TimingSystemIndex);
         }
 
         public static int RaceSectorCalculator(int lapNumber, int timingSystemIndex)
