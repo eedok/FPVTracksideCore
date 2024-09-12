@@ -1,4 +1,6 @@
-﻿using Microsoft.Xna.Framework.Graphics;
+﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -124,6 +126,21 @@ namespace Tools
             return csv.Replace(',', with);
         }
 
+        public static IEnumerable<Keys> GetKeys(this IEnumerable<ShortcutKey> shortcutKeys)
+        {
+            foreach (ShortcutKey shortcutKey in shortcutKeys.Where(r => r != null))
+            {
+                foreach (Keys key in shortcutKey.InvolvedKeys)
+                {
+                    yield return key;
+                }
+            }
+        }
+
+        public static string ToHex(this Color color)
+        {
+            return "#" + color.R.ToString("XX") + color.G.ToString("XX") + color.B.ToString("XX");
+        }
     }
 
     public class DateOnlyAttribute : Attribute

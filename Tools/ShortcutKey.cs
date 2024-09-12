@@ -15,6 +15,32 @@ namespace Tools
 
         public Keys Key { get; set; }
 
+        public IEnumerable<Keys> InvolvedKeys
+        {
+            get
+            {
+                if (ControlKey)
+                {
+                    yield return Keys.LeftControl;
+                    yield return Keys.RightControl;
+                }
+
+                if (ShiftKey)
+                {
+                    yield return Keys.LeftShift;
+                    yield return Keys.RightShift;
+                }
+
+                if (AltKey)
+                {
+                    yield return Keys.LeftAlt;
+                    yield return Keys.RightAlt;
+                }
+
+                yield return Key;
+            }
+        }
+
         public ShortcutKey()
         {
             ControlKey = false;
@@ -50,6 +76,32 @@ namespace Tools
             texts.Add(Key.ToString());
 
             return string.Join(" + ", texts);
+        }
+
+        public bool Match(KeyboardState keyboardState)
+        {
+            if (ControlKey)
+            {
+                if (!keyboardState.IsKeyDown(Keys.LeftControl) && !keyboardState.IsKeyDown(Keys.RightControl))
+                    return false;
+            }
+
+            if (AltKey)
+            {
+                if (!keyboardState.IsKeyDown(Keys.LeftAlt) && !keyboardState.IsKeyDown(Keys.RightAlt))
+                    return false;
+            }
+
+            if (ShiftKey)
+            {
+                if (!keyboardState.IsKeyDown(Keys.LeftShift) && !keyboardState.IsKeyDown(Keys.RightShift))
+                    return false;
+            }
+
+            if (!keyboardState.IsKeyDown(Key))
+                return false;
+
+            return true;    
         }
     }
 }

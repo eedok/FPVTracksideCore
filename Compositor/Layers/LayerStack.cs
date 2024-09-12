@@ -25,10 +25,13 @@ namespace Composition.Layers
 
         public Rectangle Bounds { get; private set; }
 
+        public ContentManager Content { get; private set; }
+
         public LayerStack(GraphicsDevice graphicsDevice, LayerStackGame game, PlatformTools platformTools)
             :this(graphicsDevice, game.Window, platformTools)
         {
             Game = game;
+            Content = game.Content;
         }
 
         public LayerStack(GraphicsDevice graphicsDevice, GameWindow gameWindow, PlatformTools platformTools)
@@ -72,7 +75,7 @@ namespace Composition.Layers
             //iterate through in reverse order
             for (int i = layerArray.Length - 1; i >= 0; i--)
             {
-                if (!layerArray[i].Visible)
+                if (!layerArray[i].Visible && !layerArray[i].AlwaysGetKeyboardEvents)
                     continue;
 
                 if (layerArray[i].OnKeyboardInput(inputEvent))

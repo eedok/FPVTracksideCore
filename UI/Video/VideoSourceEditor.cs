@@ -38,7 +38,7 @@ namespace UI.Video
 
         public static VideoSourceEditor GetVideoSourceEditor(EventManager em, Profile profile)
         {
-            VideoManager videoManager = new VideoManager(GeneralSettings.Instance.EventStorageLocation, profile);
+            VideoManager videoManager = new VideoManager(ApplicationProfileSettings.Instance.EventStorageLocation, profile);
 
             videoManager.LoadDevices();
             videoManager.MaintainConnections = true;
@@ -312,7 +312,7 @@ namespace UI.Video
 
         protected override void ChildValueChanged(Change newChange)
         {
-            foreach (var propertyNode in GetPropertyNodes)
+            foreach (var propertyNode in PropertyNodes)
             {
                 CheckVisible(propertyNode, Selected);
             }
@@ -484,7 +484,7 @@ namespace UI.Video
                 AddChild(cn);
             }
 
-            public override void Layout(Rectangle parentBounds)
+            public override void Layout(RectangleF parentBounds)
             {
                 parentBounds.Height *= 4;
                 base.Layout(parentBounds);
@@ -925,7 +925,7 @@ namespace UI.Video
 
         public IEnumerable<VideoBounds> CreateChannelBounds(VideoConfig videoConfig)
         {
-            return CreateChannelBounds(videoConfig.Splits, new RectangleF(1, 1));
+            return CreateChannelBounds(videoConfig.Splits, RectangleF.Centered(1, 1));
         }
 
         public IEnumerable<VideoBounds> CreateChannelBounds(Splits splits, RectangleF bounds)

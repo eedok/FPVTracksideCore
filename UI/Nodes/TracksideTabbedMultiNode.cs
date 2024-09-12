@@ -1,6 +1,7 @@
 ﻿using Composition;
 using Composition.Input;
 using Composition.Nodes;
+using ExternalData;
 using Microsoft.Xna.Framework;
 using RaceLib;
 using Sound;
@@ -29,8 +30,6 @@ namespace UI.Nodes
         public bool IsOnPhotoBooth { get { return PhotoBooth == Showing; } }
         public bool IsOnRSSI { get { return rssiNode == Showing; } }
 
-
-
         private RoundsNode rounds;
         private SceneManagerNode sceneManagerNode;
         private PilotChanelList pilotChanelList;
@@ -48,13 +47,13 @@ namespace UI.Nodes
         private TextButtonNode replayButton;
         private TextButtonNode liveButton;
 
-        private EventManager eventManager;
+        protected EventManager eventManager;
         private VideoManager VideoManager;
         
         private TextButtonNode rssiButton;
+        public TextButtonNode PhotoBoothButton { get; private set; }
 
         private KeyboardShortcuts keyMapper;
-
 
         public TracksideTabbedMultiNode(EventManager eventManager, VideoManager videoManager, SoundManager soundManager, RoundsNode rounds, SceneManagerNode sceneManagerContent, TabButtonsNode tabContainer, KeyboardShortcuts keyMapper)
             : base(TimeSpan.FromSeconds(0.6f), tabContainer)
@@ -75,11 +74,20 @@ namespace UI.Nodes
 
             ReplayNode = new ReplayNode(eventManager, keyMapper);
 
-            
+
             eventManager.RaceManager.OnRaceChanged += UpdateReplayButton;
             eventManager.RaceManager.OnRaceEnd += UpdateReplayButton;
             eventManager.RaceManager.TimingSystemManager.OnInitialise += UpdateRSSIVisible;
             videoManager.OnFinishedFinalizing += VideoManager_OnFinishedFinalizing;
+        }
+
+        public override void Dispose()
+        {
+            eventManager.RaceManager.OnRaceChanged -= UpdateReplayButton;
+            eventManager.RaceManager.OnRaceEnd -= UpdateReplayButton;
+            eventManager.RaceManager.TimingSystemManager.OnInitialise -= UpdateRSSIVisible;
+
+            base.Dispose();
         }
 
         private void VideoManager_OnFinishedFinalizing()
@@ -91,7 +99,7 @@ namespace UI.Nodes
             }
         }
 
-        public void Init()
+        public virtual void Init(PlatformTools platformTools)
         {
             AddTab("Rounds", this.rounds, ShowRounds);
             liveButton = AddTab("Live", sceneManagerNode, ShowLive);
@@ -102,24 +110,15 @@ namespace UI.Nodes
             AddTab("Points", PointsSummaryNode, ShowPoints);
             AddTab("Channel List", pilotChanelList, ShowPilotChannelList);
             rssiButton = AddTab("RSSI Analyser", rssiNode, ShowAnalyser);
-            AddTab("Photo Booth", PhotoBooth, ShowPhotoBooth);
+            PhotoBoothButton = AddTab("Photo Booth", PhotoBooth, ShowPhotoBooth);
             AddTab("Patreons", patreonsNode, ShowPatreons);
 
             replayButton.Enabled = false;
+            PhotoBoothButton.Visible = platformTools.HasFeature(PlatformFeature.Video);
 
             UpdateRSSIVisible();
 
             ShowPatreons();
-        }
-
-
-        public override void Dispose()
-        {
-            eventManager.RaceManager.OnRaceChanged -= UpdateReplayButton;
-            eventManager.RaceManager.OnRaceEnd -= UpdateReplayButton;
-            eventManager.RaceManager.TimingSystemManager.OnInitialise -= UpdateRSSIVisible;
-
-            base.Dispose();
         }
 
 
@@ -160,7 +159,7 @@ namespace UI.Nodes
                 Timing.ListeningFrequency[] lastFrequencies = eventManager.RaceManager.TimingSystemManager.LastListeningFrequencies;
                 if (lastFrequencies.Length == 0)
                 {
-                    lastFrequencies = frequencies.Select(r => new Timing.ListeningFrequency(r.Band.ToString(), r.Number, r.Frequency, 1)).ToArray();
+                    lastFrequencies = frequencies.Select(r => new Timing.ListeningFrequency(r.Band.ToString(), r.Number, r.Frequency, 1, Color.Red)).ToArray();
                 }
 
                 eventManager.RaceManager.TimingSystemManager.SetListeningFrequencies(lastFrequencies);
@@ -183,12 +182,12 @@ namespace UI.Nodes
 
         public void ShowTopLaps(MouseInputEvent mie)
         {
-            if (mie != null && mie.Button == MouseButtons.Middle)
-            {
-                BaseGame baseGame = CompositorLayer.Game as BaseGame;
-                baseGame.QuickLaunchWindow<LapRecordsSummaryNode>(eventManager, keyMapper);
-                return;
-            }
+            //if (mie != null && mie.Button == MouseButtons.Middle)
+            //{
+            //    BaseGame baseGame = CompositorLayer.Game as BaseGame;
+            //    baseGame.QuickLaunchWindow<LapRecordsSummaryNode>(eventManager, keyMapper);
+            //    return;
+            //}
 
             if (LapRecordsSummaryNode.Visible)
             {
@@ -200,12 +199,12 @@ namespace UI.Nodes
 
         public void ShowPoints(MouseInputEvent mie)
         {
-            if (mie != null && mie.Button == MouseButtons.Middle)
-            {
-                BaseGame baseGame = CompositorLayer.Game as BaseGame;
-                baseGame.QuickLaunchWindow<PointsSummaryNode>(eventManager, keyMapper);
-                return;
-            }
+            //if (mie != null && mie.Button == MouseButtons.Middle)
+            //{
+            //    BaseGame baseGame = CompositorLayer.Game as BaseGame;
+            //    baseGame.QuickLaunchWindow<PointsSummaryNode>(eventManager, keyMapper);
+            //    return;
+            //}
 
             PointsSummaryNode.OrderByLast();
             PointsSummaryNode.Refresh();
@@ -214,12 +213,12 @@ namespace UI.Nodes
 
         public void ShowLaps(MouseInputEvent mie)
         {
-            if (mie != null && mie.Button == MouseButtons.Middle)
-            {
-                BaseGame baseGame = CompositorLayer.Game as BaseGame;
-                baseGame.QuickLaunchWindow<LapCountSummaryNode>(eventManager, keyMapper);
-                return;
-            }
+            //if (mie != null && mie.Button == MouseButtons.Middle)
+            //{
+            //    BaseGame baseGame = CompositorLayer.Game as BaseGame;
+            //    baseGame.QuickLaunchWindow<LapCountSummaryNode>(eventManager, keyMapper);
+            //    return;
+            //}
 
             LapCountSummaryNode.OrderByLast();
             LapCountSummaryNode.Refresh();
@@ -229,12 +228,12 @@ namespace UI.Nodes
         public void ShowRounds(MouseInputEvent mie)
         {
             eventManager.RoundManager.CheckThereIsOneRound();
-            if (mie != null && mie.Button == MouseButtons.Middle)
-            {
-                BaseGame baseGame = CompositorLayer.Game as BaseGame;
-                baseGame.QuickLaunchWindow<RoundsNode>(eventManager, keyMapper);
-                return;
-            }
+            //if (mie != null && mie.Button == MouseButtons.Middle)
+            //{
+            //    BaseGame baseGame = CompositorLayer.Game as BaseGame;
+            //    baseGame.QuickLaunchWindow<RoundsNode>(eventManager, keyMapper);
+            //    return;
+            //}
 
             ShowRounds();
         }
@@ -257,12 +256,12 @@ namespace UI.Nodes
 
         public void ShowPilotChannelList(MouseInputEvent mie)
         {
-            if (mie != null && mie.Button == MouseButtons.Middle)
-            {
-                BaseGame baseGame = CompositorLayer.Game as BaseGame;
-                baseGame.QuickLaunchWindow<PilotChanelList>(eventManager, keyMapper);
-                return;
-            }
+            //if (mie != null && mie.Button == MouseButtons.Middle)
+            //{
+            //    BaseGame baseGame = CompositorLayer.Game as BaseGame;
+            //    baseGame.QuickLaunchWindow<PilotChanelList>(eventManager, keyMapper);
+            //    return;
+            //}
 
             Show(pilotChanelList);
         }
@@ -329,13 +328,6 @@ namespace UI.Nodes
             }
 
             Show(sceneManagerNode);
-        }
-
-        public override void Draw(Drawer id, float parentAlpha)
-        {
-            id.PushClipRectangle(Bounds);
-            base.Draw(id, parentAlpha);
-            id.PopClipRectangle();
         }
 
         public void ShowReplay(MouseInputEvent mie)

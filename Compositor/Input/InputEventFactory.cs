@@ -46,6 +46,7 @@ namespace Composition.Input
         public bool CreateKeyboardEvents { get; set; }
 
         public DateTime LastKeyboardUpdateTime { get; private set; }
+        public DateTime LastMouseUpdateTime { get; private set; }
 
         public GameWindow Window { get; private set; }
 
@@ -135,17 +136,14 @@ namespace Composition.Input
                 {
                     autoResetEvent.WaitOne(1000);
 
-                    if (PlatformTools.Focused)
+                    if (CreateKeyboardEvents)
                     {
-                        if (CreateKeyboardEvents)
-                        {
-                            UpdateKeyboard();
-                        }
+                        UpdateKeyboard();
+                    }
 
-                        if (CreateMouseEvents)
-                        {
-                            UpdateMouse();
-                        }
+                    if (CreateMouseEvents)
+                    {
+                        UpdateMouse();
                     }
 
                     ProcessInputs();
@@ -198,7 +196,7 @@ namespace Composition.Input
 
         private void UpdateKeyboard()
         {
-            if (OnKeyboardInputEvent != null)
+            if (OnKeyboardInputEvent != null && PlatformTools.Focused)
             {
                 try
                 {
@@ -329,35 +327,37 @@ namespace Composition.Input
                     MouseState newState = Mouse.GetState(Window);
                     Point cursorPosition = new Point((int)(newState.X * ResolutionScale), (int)(newState.Y * ResolutionScale));
 
-                    // check we're in the window.
-                    if (!layerStack.Bounds.Contains(cursorPosition))
+                    if (cursorPosition != OldMouseState.Position)
                     {
-                        return;
+                        LastMouseUpdateTime = DateTime.Now;
                     }
 
-                    if (newState.LeftButton != OldMouseState.LeftButton)
+                    if (PlatformTools.Focused)
                     {
-                        OnMouseInput(newState.LeftButton, MouseButtons.Left, cursorPosition);
-                    }
+                        if (newState.LeftButton != OldMouseState.LeftButton)
+                        {
+                            OnMouseInput(newState.LeftButton, MouseButtons.Left, cursorPosition);
+                        }
 
-                    if (newState.MiddleButton != OldMouseState.MiddleButton)
-                    {
-                        OnMouseInput(newState.MiddleButton, MouseButtons.Middle, cursorPosition);
-                    }
+                        if (newState.MiddleButton != OldMouseState.MiddleButton)
+                        {
+                            OnMouseInput(newState.MiddleButton, MouseButtons.Middle, cursorPosition);
+                        }
 
-                    if (newState.RightButton != OldMouseState.RightButton)
-                    {
-                        OnMouseInput(newState.RightButton, MouseButtons.Right, cursorPosition);
-                    }
+                        if (newState.RightButton != OldMouseState.RightButton)
+                        {
+                            OnMouseInput(newState.RightButton, MouseButtons.Right, cursorPosition);
+                        }
 
-                    if (newState.ScrollWheelValue != OldMouseState.ScrollWheelValue)
-                    {
-                        OnMouseInput(newState.ScrollWheelValue - OldMouseState.ScrollWheelValue, cursorPosition);
-                    }
+                        if (newState.ScrollWheelValue != OldMouseState.ScrollWheelValue)
+                        {
+                            OnMouseInput(newState.ScrollWheelValue - OldMouseState.ScrollWheelValue, cursorPosition);
+                        }
 
-                    if (newState.Position != OldMouseState.Position)
-                    {
-                        OnMouseInput(cursorPosition, OldMouseState.Position);
+                        if (newState.Position != OldMouseState.Position)
+                        {
+                            OnMouseInput(cursorPosition, OldMouseState.Position);
+                        }
                     }
                 }
                 catch (Exception e)

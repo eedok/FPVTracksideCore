@@ -19,7 +19,18 @@ namespace RaceLib
             RaceTime,
             PBTime,
             RoundNumber, 
-            RaceNumber
+            RaceNumber,
+
+            Lap1Time,
+            Lap2Time,
+            Lap3Time,
+            Lap4Time,
+            Lap5Time,
+            Lap6Time,
+
+            FastestSpeed,
+            AverageSpeed,
+            Distance
         }
 
         [Browsable(false)]
@@ -31,10 +42,11 @@ namespace RaceLib
             Enabled = true;
         }
 
-        public ExportColumn(ColumnTypes type)
+        public ExportColumn(ColumnTypes type, bool enabled)
             :this()
         {
             Type = type;
+            Enabled = enabled;
         }
 
         public override string ToString()
@@ -54,11 +66,21 @@ namespace RaceLib
             {
             }
 
+            ColumnTypes[] defaultEnabled = new ColumnTypes[] 
+            {
+                ColumnTypes.PilotName,
+                ColumnTypes. Position,
+                ColumnTypes.ConsecutiveLapsTime,
+                ColumnTypes.FastestLapTime,
+                ColumnTypes.RaceTime,
+                ColumnTypes.FastestSpeed
+            };
+
             foreach (ColumnTypes type in Enum.GetValues(typeof(ColumnTypes)))
             {
                 if (!columns.Any(c => c.Type == type))
                 {
-                    columns.Add(new ExportColumn(type));
+                    columns.Add(new ExportColumn(type, defaultEnabled.Contains(type)));
                 }
             }
 

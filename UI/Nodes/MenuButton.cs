@@ -34,11 +34,11 @@ namespace UI.Nodes
         private TracksideTabbedMultiNode tabbedMultiNode;
 
         public event System.Action BackToEventSelector;
+        public event System.Action EventEditor;
         public event Action<Event> Restart;
         public event System.Action ChannelsChanged;
         public event System.Action<bool> VideoSettingsExited;
         public event System.Action TimingChanged;
-        public event System.Action EventChanged;
         public event System.Action DataDeleted;
         public event System.Action BugReport;
 
@@ -192,6 +192,11 @@ namespace UI.Nodes
 
             root.AddBlank();
 
+            root.AddItem("Application Settings", () =>
+            {
+                ShowSettingsEditor();
+            });
+
             root.AddItem("Auto Runner Settings", () =>
             {
                 ShowAutoRunnerSettings();
@@ -211,14 +216,9 @@ namespace UI.Nodes
             {
                 root.AddItem("Event Settings", () =>
                 {
-                    ShowEventSettings();
+                    EventEditor?.Invoke();
                 });
             }
-
-            root.AddItem("General Settings", () =>
-            {
-                ShowGeneralSettings();
-            });
 
             root.AddItem("Keyboard Shortcuts", () =>
             {
@@ -229,11 +229,6 @@ namespace UI.Nodes
             root.AddItem("OBS Remote Control Settings", () =>
             {
                 ShowOBSRemoteControlSettings();
-            });
-
-            root.AddItem("Profile Settings", () =>
-            {
-                ShowProfileSettingsEditor();
             });
 
             root.AddItem("Points Settings", () =>
@@ -276,41 +271,41 @@ namespace UI.Nodes
 
             if (hasEvent)
             {
-                openWindow.AddItem("Rounds", () =>
-                {
-                    BaseGame baseGame = CompositorLayer.Game as BaseGame;
-                    baseGame.QuickLaunchWindow<RoundsNode>(eventManager, keyMapper);
-                });
+                //openWindow.AddItem("Rounds", () =>
+                //{
+                //    BaseGame baseGame = CompositorLayer.Game as BaseGame;
+                //    baseGame.QuickLaunchWindow<RoundsNode>(eventManager, keyMapper);
+                //});
 
-                openWindow.AddItem("Lap Records", () =>
-                {
-                    BaseGame baseGame = CompositorLayer.Game as BaseGame;
-                    baseGame.QuickLaunchWindow<LapRecordsSummaryNode>(eventManager, keyMapper);
-                });
+                //openWindow.AddItem("Lap Records", () =>
+                //{
+                //    BaseGame baseGame = CompositorLayer.Game as BaseGame;
+                //    baseGame.QuickLaunchWindow<LapRecordsSummaryNode>(eventManager, keyMapper);
+                //});
 
-                openWindow.AddItem("Points", () =>
-                {
-                    BaseGame baseGame = CompositorLayer.Game as BaseGame;
-                    baseGame.QuickLaunchWindow<PointsSummaryNode>(eventManager, keyMapper);
-                });
+                //openWindow.AddItem("Points", () =>
+                //{
+                //    BaseGame baseGame = CompositorLayer.Game as BaseGame;
+                //    baseGame.QuickLaunchWindow<PointsSummaryNode>(eventManager, keyMapper);
+                //});
 
-                openWindow.AddItem("Lap Count", () =>
-                {
-                    BaseGame baseGame = CompositorLayer.Game as BaseGame;
-                    baseGame.QuickLaunchWindow<LapCountSummaryNode>(eventManager, keyMapper);
-                });
+                //openWindow.AddItem("Lap Count", () =>
+                //{
+                //    BaseGame baseGame = CompositorLayer.Game as BaseGame;
+                //    baseGame.QuickLaunchWindow<LapCountSummaryNode>(eventManager, keyMapper);
+                //});
 
-                openWindow.AddItem("Channel List", () =>
-                {
-                    BaseGame baseGame = CompositorLayer.Game as BaseGame;
-                    baseGame.QuickLaunchWindow<PilotChanelList>(eventManager, keyMapper);
-                });
+                //openWindow.AddItem("Channel List", () =>
+                //{
+                //    BaseGame baseGame = CompositorLayer.Game as BaseGame;
+                //    baseGame.QuickLaunchWindow<PilotChanelList>(eventManager, keyMapper);
+                //});
 
-                openWindow.AddItem("Event Status", () =>
-                {
-                    BaseGame baseGame = CompositorLayer.Game as BaseGame;
-                    baseGame.QuickLaunchWindow<EventStatusNodeTopBar>(eventManager, keyMapper);
-                });
+                //openWindow.AddItem("Event Status", () =>
+                //{
+                //    BaseGame baseGame = CompositorLayer.Game as BaseGame;
+                //    baseGame.QuickLaunchWindow<EventStatusNodeTopBar>(eventManager, keyMapper);
+                //});
 
                 root.AddBlank();
 
@@ -350,19 +345,24 @@ namespace UI.Nodes
 
             openDirectory.AddItem("Open FPVTrackside Directory", () =>
             {
-                OpenDirectory();
+                OpenCurrentDirectory();
             });
 
             openDirectory.AddItem("Open Pilot Profile Image Directory", () =>
             {
-                OpenPilotDirectory();
+                OpenCurrentDirectory("pilots\\");
+            });
+
+            openDirectory.AddItem("Open Tracks Directory", () =>
+            {
+                OpenCurrentDirectory("Tracks\\");
             });
 
             if (hasEvent)
             {
                 openDirectory.AddItem("Open Event Data Directory", () =>
                 {
-                    OpenEventDirectory();
+                    OpenCurrentDirectory("events\\" + eventManager.EventId + "\\");
                 });
             }
 
@@ -497,7 +497,7 @@ namespace UI.Nodes
         {
             if (soundManager == null)
             {
-                ProfileSettings profileSettings = ProfileSettings.Read(Profile);
+                ApplicationProfileSettings profileSettings = ApplicationProfileSettings.Read(Profile);
 
                 soundManager = new SoundManager(null, Profile);
                 soundManager.SetupSpeaker(PlatformTools, profileSettings.Voice, profileSettings.TextToSpeechVolume);
@@ -550,54 +550,22 @@ namespace UI.Nodes
             GetLayer<PopupLayer>().Popup(editor);
         }
 
-        public void ShowEventSettings()
+        public void ShowSettingsEditor()
         {
-            EventEditor editor = new EventEditor(eventManager.Event);
+            ApplicationProfileSettings profileSettings = ApplicationProfileSettings.Read(Profile);
+
+            SettingsEditor editor = new SettingsEditor(profileSettings);
             GetLayer<PopupLayer>().Popup(editor);
 
             editor.OnOK += (e) =>
             {
-                eventManager.Event = editor.Objects.FirstOrDefault();
-                using (IDatabase db = DatabaseFactory.Open(eventManager.EventId))
-                {
-                    db.Update(eventManager.Event);
-                }
-
-                EventChanged?.Invoke();
-            };
-        }
-
-        public void ShowGeneralSettings()
-        {
-            GeneralSettingsEditor editor = new GeneralSettingsEditor(GeneralSettings.Instance);
-            GetLayer<PopupLayer>().Popup(editor);
-
-            editor.OnOK += (e) =>
-            {
-                GeneralSettings.Write();
+                ApplicationProfileSettings.Write(Profile, profileSettings);
                 if (hasEvent && Restart != null && editor.NeedsRestart)
                 {
                     GetLayer<PopupLayer>().PopupConfirmation("Changes require restart to take effect. Restart now?", () => { Restart(evennt); });
                 }
 
-                GeneralSettingsSaved?.Invoke();
-            };
-        }
-
-        public void ShowProfileSettingsEditor()
-        {
-            ProfileSettings profileSettings = ProfileSettings.Read(Profile);
-
-            ProfileSettingsEditor editor = new ProfileSettingsEditor(profileSettings);
-            GetLayer<PopupLayer>().Popup(editor);
-
-            editor.OnOK += (e) =>
-            {
-                ProfileSettings.Write(Profile, profileSettings);
-                if (hasEvent && Restart != null && editor.NeedsRestart)
-                {
-                    GetLayer<PopupLayer>().PopupConfirmation("Changes require restart to take effect. Restart now?", () => { Restart(evennt); });
-                }
+                ApplicationProfileSettings.Initialize(Profile);
 
                 ProfileSettingsSaved?.Invoke();
             };
@@ -637,29 +605,24 @@ namespace UI.Nodes
             RequestLayout();
         }
 
-        public void OpenDirectory()
+        public void OpenCurrentDirectory(string addition = "")
         {
-            PlatformTools.OpenFileManager(System.IO.Directory.GetCurrentDirectory());
-        }
+            string path = Directory.GetCurrentDirectory();
+            if (!string.IsNullOrEmpty(addition))
+            {
+                path = Path.Combine(path, addition);
+            }
 
-        public void OpenEventDirectory()
-        {
-            PlatformTools.OpenFileManager(Directory.GetCurrentDirectory() + "\\events\\" + eventManager.EventId + "\\");
+            PlatformTools.OpenFileManager(path);
         }
-
-        public void OpenPilotDirectory()
-        {
-            PlatformTools.OpenFileManager(System.IO.Directory.GetCurrentDirectory() + "\\pilots\\");
-        }
-        
 
         public void OpenWebServer()
         {
             if (eventWebServer != null)
             {
-                if (GeneralSettings.Instance.HTTPServer == false)
+                if (ApplicationProfileSettings.Instance.HTTPServer == false)
                 {
-                    GeneralSettings.Instance.HTTPServer = true;
+                    ApplicationProfileSettings.Instance.HTTPServer = true;
                 }
 
                 if (!eventWebServer.Running)
@@ -678,7 +641,7 @@ namespace UI.Nodes
 
         public void ExportRacesCSV()
         {
-            PlatformTools.ExportCSV("Save Race Results CSV", eventManager.RaceManager.GetRaceResultsText(","), GetLayer<PopupLayer>());
+            PlatformTools.ExportCSV("Save Race Results CSV", eventManager.RaceManager.GetRaceResultsText(ApplicationProfileSettings.Instance.Units, ","), GetLayer<PopupLayer>());
         }
 
         public void ExportLapsCSV()

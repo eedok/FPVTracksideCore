@@ -50,6 +50,8 @@ namespace UI
         public DirectoryInfo Patreons { get; private set; }
         public DirectoryInfo HTTPFiles { get; private set; }
 
+        public Tools.Profile Profile { get; private set; }
+
         public BaseGame(PlatformTools platformTools)
             :base(platformTools)
         {
@@ -59,7 +61,6 @@ namespace UI
 
             hasEverShownEventSelector = false;
             mutex = new Mutex(false, "FPVTrackside - uewepuep");
-
 
             Log = CreateDirectory(platformTools.WorkingDirectory, "log");
             Data = CreateDirectory(platformTools.WorkingDirectory, "data");
@@ -71,7 +72,6 @@ namespace UI
             HTTPFiles = CreateDirectory(platformTools.WorkingDirectory, "httpfiles");
 
             Content.RootDirectory = "Content";
-            IsMouseVisible = true;
             IsFixedTimeStep = false;
             this.Window.Title = Assembly.GetEntryAssembly().GetName().Name + " - " + Assembly.GetEntryAssembly().GetName().Version;
             
@@ -122,13 +122,29 @@ namespace UI
             Tools.Logger.CleanUp();
         }
 
+        protected override void Initialize()
+        {
+            GeneralSettings.Initialise();
+
+            Profile = new Profile(GeneralSettings.Instance.Profile);
+
+            ApplicationProfileSettings.Initialize(Profile);
+
+            if (!ApplicationProfileSettings.Instance.UseDirectX9)
+            {
+                GraphicsDeviceManager.GraphicsProfile = GraphicsProfile.HiDef;
+                GraphicsDeviceManager.ApplyChanges();
+            }
+            base.Initialize();
+        }
+
         protected override void LoadContent()
         {
             Logger.UI.Log(this, this.Window.Title, "LoadContent");
 
             base.LoadContent();
 
-            float inversScale = GeneralSettings.Instance.InverseResolutionScalePercent / 100.0f;
+            float inversScale = ApplicationProfileSettings.Instance.InverseResolutionScalePercent / 100.0f;
             if (inversScale > 0)
             {
                 LayerStack.Scale = 1 / inversScale;
@@ -175,10 +191,10 @@ namespace UI
                 LayerStack.Add(alreadyRunning);
             }
 
-            int frameRate = Math.Min(1000, Math.Max(1, GeneralSettings.Instance.FrameRateLimit));
+            int frameRate = Math.Min(1000, Math.Max(1, ApplicationProfileSettings.Instance.FrameRateLimit));
             TargetElapsedTime = TimeSpan.FromSeconds(1f / frameRate);
             IsFixedTimeStep = true;
-            GraphicsDeviceManager.SynchronizeWithVerticalRetrace = GeneralSettings.Instance.VSync;
+            GraphicsDeviceManager.SynchronizeWithVerticalRetrace = ApplicationProfileSettings.Instance.VSync;
             GraphicsDeviceManager.ApplyChanges();
 
 
@@ -197,7 +213,7 @@ namespace UI
 
         public virtual void Startup()
         {
-            if (GeneralSettings.Instance.ShowWelcomeScreen2 && !hasEverShownEventSelector)
+            if (ApplicationProfileSettings.Instance.ShowWelcomeScreen && !hasEverShownEventSelector)
             {
                 ShowWelcomeSetup();
             }
@@ -226,10 +242,15 @@ namespace UI
 
             Logger.UI.LogCall(this);
             hasEverShownEventSelector = true;
-            eventSelector = new EventSelectorLayer(GraphicsDevice, Banner);
+            eventSelector = new EventSelectorLayer(GraphicsDevice, CreateEventSelectorEditor());
 
             LayerStack.AddAbove<BackgroundLayer>(eventSelector);
             eventSelector.OnOK += EventSelected;
+        }
+
+        protected virtual EventSelectorEditor CreateEventSelectorEditor()
+        {
+            return new EventSelectorEditor(Banner, Profile);
         }
 
         public void ShowWelcomeSetup()
@@ -298,19 +319,11 @@ namespace UI
         {
             loadingLayer.BlockOnLoading = true;
 
-            ProfileSettings.Initialize(profile);
-
             WorkSet startEventWorkSet = new WorkSet();
             startEventWorkSet.OnError += ErrorLoadingEvent;
             EventManager eventManager = new EventManager(profile);
 
-            Theme.Initialise(PlatformTools.WorkingDirectory, "Dark");
-
             BackgroundLayer backgroundLayer = LayerStack.GetLayer<BackgroundLayer>();
-            if (backgroundLayer != null)
-            {
-                backgroundLayer.SetBackground(Theme.Current.Background);
-            }
 
             eventManager.LoadEvent(startEventWorkSet, loadingLayer.WorkQueue, selected);
             
@@ -318,7 +331,18 @@ namespace UI
             eventManager.LoadRaces(startEventWorkSet, loadingLayer.WorkQueue, selected);
 
             OnStartEvent(eventManager, selected);
-            
+
+            loadingLayer.WorkQueue.Enqueue(startEventWorkSet, "Reloading Settings", () =>
+            {
+                // Re-init the following settings so settings windows can reload event to reload settings.
+                ApplicationProfileSettings.Initialize(Profile);
+                Theme.Initialise(PlatformTools.WorkingDirectory, "Dark");
+
+                if (backgroundLayer != null)
+                {
+                    backgroundLayer.SetBackground(Theme.Current.Background);
+                }
+            });
 
             loadingLayer.WorkQueue.Enqueue(startEventWorkSet, "Initializing UI", () =>
             {
@@ -340,21 +364,24 @@ namespace UI
 
             loadingLayer.WorkQueue.Enqueue(startEventWorkSet, "Setting Scene", () =>
             {
-                eventLayer.FinalSetup();
-
-                while (eventLayer.Root.Alpha < 1)
+                if (eventLayer != null)
                 {
-                    Thread.Sleep(10);
-                    eventLayer.Root.Alpha += 0.05f;
-                }
+                    eventLayer.FinalSetup();
 
-                eventLayer.Root.Alpha = 1;
+                    while (eventLayer.Root.Alpha < 1)
+                    {
+                        Thread.Sleep(10);
+                        eventLayer.Root.Alpha += 0.05f;
+                    }
+
+                    eventLayer.Root.Alpha = 1;
+                }
             });
         }
 
         protected virtual void CreateEventLayer(EventManager eventManager)
         {
-            eventLayer = new EventLayer(this, GraphicsDevice, eventManager);
+            eventLayer = new EventLayer(this, GraphicsDevice, eventManager, PlatformTools);
 
             eventLayer.Root.Alpha = 0;
             LayerStack.AddAbove<BackgroundLayer>(eventLayer);
@@ -388,6 +415,17 @@ namespace UI
                     ((UI.BaseGame)LayerStack.Game).Restart(null);
                 }
             });
+        }
+
+        protected override void Update(GameTime gameTime)
+        {
+            base.Update(gameTime);
+
+            if (LayerStack != null && LayerStack.InputEventFactory != null)
+            {
+                TimeSpan sinceMouseMove = DateTime.Now - LayerStack.InputEventFactory.LastMouseUpdateTime;
+                IsMouseVisible = sinceMouseMove.TotalSeconds < 5;
+            }
         }
 
         public void ShowNewWindow(Node node)

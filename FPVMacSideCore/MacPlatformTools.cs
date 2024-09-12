@@ -36,8 +36,7 @@ namespace FPVMacsideCore
             {
                 return new PlatformFeature[]
                 {
-                    PlatformFeature.Speech,
-                    PlatformFeature.Video
+                    PlatformFeature.Speech
                 };
             }
         }
@@ -98,7 +97,7 @@ namespace FPVMacsideCore
             Console.WriteLine("Source " + oldWorkDir.FullName);
 
 
-            string[] toCopy = new string[] { "themes", "img", "bitmapfonts", "httpfiles", "formats", "sounds" };
+            string[] toCopy = new string[] { "themes", "img", "bitmapfonts", "httpfiles", "formats", "sounds", "Content" };
             foreach (string copy in toCopy)
             {
                 try
@@ -168,15 +167,6 @@ namespace FPVMacsideCore
         public override void ShowNewWindow(Node node)
         {
 
-        }
-
-        public override Tuple<string, string> GetSavedUsernamePassword(string service)
-        {
-            return new Tuple<string, string>("", "");
-        }
-
-        public override void SetSavedUsernamePassword(string service, string username, string password)
-        {
         }
 
         public override void OpenFileManager(string directory)

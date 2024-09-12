@@ -65,6 +65,10 @@ namespace Tools
             }
         }
 
+        public float Left { get { return X; } }
+        public float Top { get { return Y; } }
+
+
         public RectangleF(Rectangle r)
             :this(r.X, r.Y, r.Width, r.Height)
         {
@@ -72,19 +76,16 @@ namespace Tools
 
         public RectangleF(float x, float y, float width, float height)
         {
-            this.X = x;
-            this.Y = y;
-            this.Width = width;
-            this.Height = height;
-        }
-
-        public RectangleF(float width, float height)
-        {
+            X = x;
+            Y = y;
             Width = width;
             Height = height;
+        }
 
-            X = (1 - width) / 2;
-            Y = (1 - height) / 2;
+
+        public RectangleF(Point p, Size s)
+            :this(p.X, p.Y, s.Width, s.Height)
+        { 
         }
 
         public override string ToString()
@@ -105,6 +106,17 @@ namespace Tools
             }
 
             return base.Equals(obj);
+        }
+
+        public bool Contains(Point p)
+        {
+            return Contains(p.X, p.Y);
+        }
+
+        public bool Contains(float px, float py)
+        {
+            return (px >= X && px <= Right
+                 && py >= Y && py <= Bottom);
         }
 
         public override int GetHashCode()
@@ -147,7 +159,32 @@ namespace Tools
 
         public Microsoft.Xna.Framework.Rectangle ToRectangle()
         {
-            return new Microsoft.Xna.Framework.Rectangle((int)X, (int)Y, (int)Width, (int)Height);
+            return new Microsoft.Xna.Framework.Rectangle(
+                (int)Math.Round(X), 
+                (int)Math.Round(Y), 
+                (int)Math.Round(Width), 
+                (int)Math.Round(Height));
+        }
+
+        public void Round()
+        {
+            X = (int)Math.Round(X);
+            Y = (int)Math.Round(Y);
+            Width = (int)Math.Round(Width);
+            Height = (int)Math.Round(Height);
+        }
+
+        public static RectangleF Centered(float width, float height)
+        {
+            RectangleF r = new RectangleF();
+
+            r.Width = width;
+            r.Height = height;
+
+            r.X = (1 - width) / 2;
+            r.Y = (1 - height) / 2;
+
+            return r;
         }
     }
 

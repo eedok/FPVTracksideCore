@@ -22,8 +22,6 @@ namespace UI.Nodes
         public IconButtonNode CopyResultsClipboard { get; private set; }
         public IconButtonNode ResetButton { get; private set; }
         public IconButtonNode ResumeButton { get; private set; }
-
-        public IconButtonNode SyncButton { get; private set; }
         public IconButtonNode WormButton { get; private set; }
 
         public AutoRunnerControls AutoRunnerControls { get; private set; }
@@ -37,6 +35,8 @@ namespace UI.Nodes
         public int ItemPaddingVertical { get; set; }
 
         private bool needsUpdate;
+
+        public event Action OnControlButtonsUpdate;
 
         public ControlButtonsNode(EventManager eventManager, ChannelsGridNode channelsGridNode, TracksideTabbedMultiNode tracksideMultiNode, AutoRunner autoRunner)
         {
@@ -97,12 +97,6 @@ namespace UI.Nodes
             }
         }
 
-        public void AddSyncButton(IconButtonNode button)
-        {
-            SyncButton = button;
-            SyncButton.ImageNode.Tint = Theme.Current.RightControls.Text.XNA;
-            AddChild(SyncButton);
-        }
 
         public override void Dispose()
         {
@@ -169,11 +163,6 @@ namespace UI.Nodes
                 ClearButton.Visible = false;
                 ResumeButton.Visible = false;
             }
-            
-            if (SyncButton != null)
-            {
-                SyncButton.Visible = !inRaceOrPreRace;
-            }
             ClearButton.Visible = showingAnyPilots && !inRaceOrPreRace;
 
             Race nextRace = eventManager.RaceManager.GetNextRace(true);
@@ -194,17 +183,19 @@ namespace UI.Nodes
 
             WormButton.Visible = eventManager.RaceManager.RaceRunning;
 
-            LayoutChildren(Bounds);
+            OnControlButtonsUpdate?.Invoke();
+
+            LayoutChildren(BoundsF);
         }
 
-        protected override void LayoutChildren(Rectangle bounds)
+        protected override void LayoutChildren(RectangleF bounds)
         {
             Node[] items = Children;
 
-            int left = ItemPaddingHorizontal + bounds.Left;
-            int width = bounds.Width - (ItemPaddingHorizontal * 2);
+            float left = ItemPaddingHorizontal + bounds.Left;
+            float width = bounds.Width - (ItemPaddingHorizontal * 2);
 
-            int prevTop = bounds.Bottom;
+            float prevTop = bounds.Bottom;
             foreach (Node n in items)
             {
                 if (!n.Visible)
@@ -219,7 +210,7 @@ namespace UI.Nodes
                     height = (int)(1.7 * ItemHeight);
                 }
 
-                Rectangle newBounds = new Rectangle(left, 
+                RectangleF newBounds = new RectangleF(left, 
                                                     prevTop - (ItemPaddingVertical + height),
                                                     width,
                                                     height);

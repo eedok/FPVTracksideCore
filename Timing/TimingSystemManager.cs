@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Intrinsics.X86;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -37,6 +38,18 @@ namespace Timing
             get
             {
                 return PrimeSystems.Union(SplitSystems);
+            }
+        }
+
+        public IEnumerable<ITimingSystem> TimingSystemsSectorOrder
+        {
+            get
+            {
+                foreach (ITimingSystem timingSystem in SplitSystems)
+                    yield return timingSystem;
+
+                foreach (ITimingSystem timingSystem in PrimeSystems)
+                    yield return timingSystem;
             }
         }
 
@@ -261,6 +274,11 @@ namespace Timing
 
         public bool StartDetection(ref DateTime start)
         {
+            return StartDetection(ref start, Guid.Empty);
+        }
+
+        public bool StartDetection(ref DateTime start, Guid raceId)
+        {
             Logger.TimingLog.LogCall(this);
 
             if (PrimeSystems == null || !PrimeSystems.Any())
@@ -272,10 +290,18 @@ namespace Timing
             bool startedDetection = true;
             foreach (ITimingSystem prime in PrimeSystems)
             {
-                startedDetection &= prime.StartDetection(ref start);
-                if (startedDetection)
+                try
                 {
-                    OnDataReceived?.Invoke(prime);
+                    startedDetection &= prime.StartDetection(ref start, raceId);
+                    if (startedDetection)
+                    {
+                        OnDataReceived?.Invoke(prime);
+                    }
+                }
+                catch (Exception e) 
+                {
+                    Logger.TimingLog.LogException(this, e);
+                    startedDetection = false;
                 }
             }
 
@@ -285,9 +311,16 @@ namespace Timing
             {
                 foreach (ITimingSystem aux in SplitSystems)
                 {
-                    if (aux.StartDetection(ref auxStart))
+                    try
                     {
-                        OnDataReceived?.Invoke(aux);
+                        if (aux.StartDetection(ref auxStart, raceId))
+                        {
+                            OnDataReceived?.Invoke(aux);
+                        }
+                    }
+                    catch (Exception e) 
+                    {
+                        Logger.TimingLog.LogException(this, e);
                     }
                 }
                 return true;
@@ -296,7 +329,15 @@ namespace Timing
             {
                 foreach (ITimingSystem ts in TimingSystems)
                 {
-                    ts.EndDetection();
+                    try
+                    {
+                        ts.EndDetection();
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.TimingLog.LogException(this, e);
+                        startedDetection = false;
+                    }
                 }
 
                 detectionRunning = false;
@@ -313,9 +354,16 @@ namespace Timing
 
             foreach (ITimingSystem timingSystem in TimingSystems)
             {
-                if (timingSystem.EndDetection())
+                try
                 {
-                    OnDataReceived?.Invoke(timingSystem);
+                    if (timingSystem.EndDetection())
+                    {
+                        OnDataReceived?.Invoke(timingSystem);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.TimingLog.LogException(this, e);
                 }
             }
         }
@@ -335,9 +383,16 @@ namespace Timing
             OnDataSent?.Invoke();
             foreach (ITimingSystem timingSystem in TimingSystems)
             {
-                if (timingSystem.Disconnect())
+                try
                 {
-                    OnDataReceived?.Invoke(timingSystem);
+                    if (timingSystem.Disconnect())
+                    {
+                        OnDataReceived?.Invoke(timingSystem);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.TimingLog.LogException(this, e);
                 }
             }
         }

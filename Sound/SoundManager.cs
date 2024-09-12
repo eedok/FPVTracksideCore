@@ -133,6 +133,8 @@ namespace Sound
 
         public void Dispose()
         {
+            StopSound();
+
             backgroundQueue?.Dispose();
             backgroundQueue = null;
 
@@ -213,6 +215,7 @@ namespace Sound
                     new Sound() { Key = SoundKey.StaggeredPilot, TextToSpeech = "{pilot}", Category = Sound.SoundCategories.Race },
 
                     new Sound() { Key = SoundKey.RaceAnnounce, TextToSpeech = "Next up Round {round} {type} {race} {bracket}. ", Category = Sound.SoundCategories.Announcements },
+                    new Sound() { Key = SoundKey.InTheHole, TextToSpeech = "In the hole {pilots}", Category = Sound.SoundCategories.Announcements, Enabled = false },
                     new Sound() { Key = SoundKey.RaceAnnounceResults, TextToSpeech = "Results of Round {round} {type} {race} {bracket}. ", Category = Sound.SoundCategories.Announcements },
 
                     new Sound() { Key = SoundKey.AnnouncePilotChannel, TextToSpeech = "{pilot} on {band}{channel}", Category = Sound.SoundCategories.Announcements },
@@ -247,7 +250,9 @@ namespace Sound
                     new Sound() { Key = SoundKey.TimingSystemConnected, TextToSpeech = "Timing system connected", Category = Sound.SoundCategories.Status },
                     new Sound() { Key = SoundKey.TimingSystemsConnected, TextToSpeech = "{count} Timing systems connected", Category = Sound.SoundCategories.Status },
 
-                    new Sound() { Key = SoundKey.NoVideoDelayingRace, TextToSpeech = " Race start delayed as {pilot} has no video. Race starts in {time}", Category = Sound.SoundCategories.Race },
+                    new Sound() { Key = SoundKey.VideoDelayingRace, TextToSpeech = "Race start delayed as {pilot} doesn't have video.", Category = Sound.SoundCategories.Race },
+                    new Sound() { Key = SoundKey.PilotsEnableVideo, TextToSpeech = "Pilots turn on your video transmitters", Category = Sound.SoundCategories.Race },
+                    new Sound() { Key = SoundKey.VideoLooksGood, TextToSpeech = "Video looks good", Category = Sound.SoundCategories.Race },
 
                     new Sound() { Key = SoundKey.UntilRaceStart, TextToSpeech = "{time} until the race start", Category = Sound.SoundCategories.Announcements },
 
@@ -345,6 +350,9 @@ namespace Sound
             backgroundQueue.Clear();
             backgroundQueue.Enqueue(() =>
             {
+                Race nextRace = eventManager.RaceManager.GetNextRace(race);
+                PlayInTheHole(nextRace);
+
                 SpeechParameters parameters = new SpeechParameters();
                 parameters.Priority = 1000;
                 parameters.SecondsExpiry = 10;
@@ -396,6 +404,19 @@ namespace Sound
                 }
                 HighlightPilot(null);
             });
+        }
+
+        private void PlayInTheHole(Race nextRace)
+        {
+            if (nextRace == null)
+                return;
+
+            SpeechParameters pilotChannelParameters = new SpeechParameters();
+            pilotChannelParameters.Priority = 1000;
+            pilotChannelParameters.SecondsExpiry = 5;
+            pilotChannelParameters.Add(SpeechParameters.Types.pilots, nextRace.PilotNames);
+
+            PlaySoundBlocking(SoundKey.InTheHole,  pilotChannelParameters);
         }
 
         private void HighlightPilot(Pilot pilot)
@@ -920,16 +941,26 @@ namespace Sound
             PlaySound(SoundKey.UntilRaceStart, soundParameters);
         }
 
-        public void PlayVideoIssuesDelayRace(TimeSpan time, Pilot pilot)
+        public void PlayVideoIssuesDelayRace(Pilot pilot)
         {
             StopSound();
 
             SpeechParameters soundParameters = new SpeechParameters();
-            soundParameters.AddTime(SpeechParameters.Types.time, time);
             soundParameters.Add(SpeechParameters.Types.pilot, pilot.Phonetic);
             soundParameters.Priority = 1111;
             soundParameters.SecondsExpiry = 10;
-            PlaySound(SoundKey.NoVideoDelayingRace, soundParameters);
+            PlaySound(SoundKey.VideoDelayingRace, soundParameters);
+        }
+
+        public void PlayEnableVideo()
+        {
+            PlaySound(SoundKey.PilotsEnableVideo);
+        }
+
+        public void PlayVideoOk(Action startRace)
+        {
+            StopSound();
+            PlaySound(SoundKey.VideoLooksGood, startRace);
         }
     }
 

@@ -223,7 +223,7 @@ namespace UI.Nodes.Rounds
 
                     copyMenu.AddItem("Copy Results", () =>
                     {
-                        string textResults = EventManager.ResultManager.GetResultsText(Race);
+                        string textResults = EventManager.ResultManager.GetResultsText(Race, ApplicationProfileSettings.Instance.Units);
                         PlatformTools.Clipboard.SetText(textResults);
                     });
 
@@ -447,7 +447,7 @@ namespace UI.Nodes.Rounds
             Refresh();
         }
 
-        public override void Layout(Rectangle parentBounds)
+        public override void Layout(RectangleF parentBounds)
         {
             if (NeedsInit)
             {

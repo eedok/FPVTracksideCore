@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Xna.Framework;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -31,23 +32,28 @@ namespace Timing
         public float SensitivityFactor { get; set; }
 
         public string Pilot { get; set; }
+        public Guid PilotId { get; set; }
 
         public int Channel { get; set; }
         public string Band { get; set; }
 
+        public Color Color { get; set; }
 
-        public ListeningFrequency(string band, int channel, int frequency, float sensitivityFactor)
-            :this("", band, channel, frequency, sensitivityFactor)
+
+        public ListeningFrequency(string band, int channel, int frequency, float sensitivityFactor, Color color)
+            :this("", Guid.Empty, band, channel, frequency, sensitivityFactor, color)
         {
         }
 
-        public ListeningFrequency(string pilot, string band, int channel, int freq, float sensitivity)
+        public ListeningFrequency(string pilot, Guid pilotId, string band, int channel, int freq, float sensitivity, Color color)
         {
             Frequency = freq;
             SensitivityFactor = sensitivity;
             Pilot = pilot;
+            PilotId = pilotId;
             Band = band;
             Channel = channel;
+            Color = color;
         }
 
         public override string ToString()
@@ -104,7 +110,7 @@ namespace Timing
         /// Return true if it started ok. 
         /// Returning false will cancel race start and system will attempt to Connect();
         /// </returns>  
-        bool StartDetection(ref DateTime time);
+        bool StartDetection(ref DateTime time, Guid raceId);
 
         /// <summary>  
         /// Stops the system listening for detection events.  </summary>  
@@ -145,10 +151,6 @@ namespace Timing
     {
         [Category("System Settings")]
         public TimingSystemRole Role { get; set; }
-
-        [Category("Speed Calculation. (0 to disable)")]
-        [DisplayName("Preceding Sector Length (Meters)")]
-        public float SectorLengthMeters { get; set; }
 
         private const string timingSystemFilename = "TimingSystemSettings.xml";
 

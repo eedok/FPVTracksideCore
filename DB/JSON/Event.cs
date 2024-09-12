@@ -14,6 +14,13 @@ using static Microsoft.IO.RecyclableMemoryStreamManager;
 
 namespace DB.JSON
 {
+    public enum SyncWith
+    {
+        None,
+        FPVTrackside,
+        MultiGP
+    }
+
     public class Event : DatabaseObjectT<RaceLib.Event>
     {
         public string EventType { get; set; }
@@ -56,15 +63,32 @@ namespace DB.JSON
 
         public Guid[] Races { get; set; }
 
-        [Browsable(false)]
-        public SyncWith SyncWith { get; set; }
+        // Legacy
+        public SyncWith SyncWith
+        {
+            set
+            {
+                switch (value)
+                {
+                    case SyncWith.FPVTrackside:
+                        SyncWithFPVTrackside = true;
+                        break;
+                    case SyncWith.MultiGP:
+                        SyncWithMultiGP = true; 
+                        break;
+                }
+            }
+        }
 
-        public bool Sync { get; set; }
-        public bool Visible { get; set; }
+        public bool SyncWithFPVTrackside { get; set; }
+        public bool SyncWithMultiGP { get; set; }
+        public bool GenerateHeatsMultiGP { get; set; }
+        public bool VisibleOnline { get; set; }
         public bool Locked { get; set; }
 
-        public int ExternalID { get; set; }
-
+        public Guid Track { get; set; }
+        public Sector[] Sectors { get; set; }
+        
         public Event()
         {
         }
@@ -90,9 +114,16 @@ namespace DB.JSON
             ExternalID = obj.ExternalID;
 
             ChannelColors = obj.ChannelColors;
-            SyncWith = obj.SyncWith;
-            Sync = obj.Sync;
-            Visible = obj.Visible;
+            SyncWithFPVTrackside = obj.SyncWithFPVTrackside;
+            SyncWithMultiGP = obj.SyncWithMultiGP;
+            GenerateHeatsMultiGP = obj.GenerateHeatsMultiGP;
+            VisibleOnline = obj.VisibleOnline;
+
+            if (obj.Track != null)
+                Track = obj.Track.ID;
+
+            Copy(obj.Sectors, out DB.JSON.Sector[] temp);
+            Sectors = temp;
         }
 
         public override RaceLib.Event GetRaceLibObject(ICollectionDatabase database)
@@ -103,8 +134,16 @@ namespace DB.JSON
             ev.PilotChannels = PilotChannels.Convert(database).Where(pc => pc != null && pc.Pilot != null).ToList();
             ev.Rounds = Rounds.Convert<RaceLib.Round>(database).ToList();
             ev.RemovedPilots = RemovedPilots.Convert<RaceLib.Pilot>(database).ToList();
-            ev.SyncWith = SyncWith;
-            ev.Sync = Sync;
+            ev.SyncWithFPVTrackside = SyncWithFPVTrackside;
+            ev.SyncWithMultiGP = SyncWithMultiGP;
+            ev.GenerateHeatsMultiGP = GenerateHeatsMultiGP;
+            ev.VisibleOnline = VisibleOnline;
+
+            ev.Track = Track.Convert<RaceLib.Track>(database);
+
+            Copy(Sectors, out RaceLib.Sector[] temp);
+            ev.Sectors = temp;
+
             return ev;
         }
 
@@ -124,6 +163,11 @@ namespace DB.JSON
 
             ev.PilotChannels = PilotChannels.Except(invalid).Select(pc => new RaceLib.PilotChannel() { Pilot = new RaceLib.Pilot() { ID = pc.Pilot }, Channel = new RaceLib.Channel() { ID = pc.Channel } }).ToList();
             ev.RemovedPilots = RemovedPilots.Select(id => new RaceLib.Pilot() { ID = id }).ToList();
+            ev.Track = Track.Convert<RaceLib.Track>(database);
+
+            Copy(Sectors, out RaceLib.Sector[] temp);
+            ev.Sectors = temp;
+
             return ev;
         }
     }

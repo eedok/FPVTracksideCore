@@ -138,7 +138,7 @@ class Formatter
         for (const pilotChannel of pilotChannels)
         {
             output += "<tr>";
-            output += "<td class=\"race_pilot\">" + pilotChannel.Pilot.Name + "</td>";
+            output += "<td class=\"race_pilot\">" + this.ToPilotNameLink(pilotChannel.Pilot) +"</td>";
             output += "<td class=\"race_channel\">" + this.ChannelToString(pilotChannel.Channel) + "</td>";
             output += "<td class=\"race_channel_color\" style=\"background-color: " + pilotChannel.Channel.Color + "\"></td>";
             output += "<td class=\"race_result\">" + this.ResultToString(pilotChannel.Result) + "</td>";
@@ -194,7 +194,7 @@ class Formatter
             output += "<div class=\"row\" >";
 
             output += "<div class=\"position\">" + this.ToStringPosition(pilotSummary.Position) + "</div>";
-            output += "<div class=\"pilots\">" + pilotSummary.Name + "</div>";
+            output += "<div class=\"pilots\">" + this.ToPilotNameLink(pilotSummary) + "</div>";
             output += "<div class=\"channel\">" + pilotSummary.Channel + "</div>";
             output += "<div class=\"channel_color\" style=\"background-color: " + pilotSummary.ChannelColor + "\"></div>";
 
@@ -350,7 +350,7 @@ class Formatter
         {
             output += "<div class=\"row\">";
             output += "<div class=\"position\">" + this.ToStringPosition(i) + "</div>";
-            output += "<div class=\"pilots\">" + pilotRecord.pilot.Name + "</div>";
+            output += "<div class=\"pilots\">" + this.ToPilotNameLink(pilotRecord.pilot) + "</div>";
             if (showHoleShot) output += "<div class=\"holeshot\">" + this.LapsToTime(pilotRecord.holeshot) + "</div>";
             if (showPB) output += "<div class=\"lap\">" + this.LapsToTime(pilotRecord.lap) + "</div>";
             output += "<div class=\"laps\">" + this.LapsToTime(pilotRecord.laps) + "</div>";
@@ -407,7 +407,7 @@ class Formatter
                         const laps = this.eventManager.BestConsecutive(nonHoleshots, lapCount);
 
                         const time = this.eventManager.TotalTime(laps);
-                        if (time == Number.MAX_SAFE_INTEGER)
+                        if (time == Number.MAX_SAFE_INTEGER || time == 0)
                             continue;
 
                         path.AddPoint(round.Order, time);
@@ -478,7 +478,14 @@ class Formatter
         let rounds = await this.eventManager.GetRounds(r => r.EventType == "Race");
         let pilotRecords = await this.eventManager.GetPoints(rounds);
 
-        pilotRecords.sort((a, b) => { return b.total - a.total });
+        pilotRecords.sort((a, b) => 
+        { 
+            if (a.bracket != b.bracket)
+            {
+                return a.bracket.localeCompare(b.bracket); 
+            }
+            return b.lastTotal - a.lastTotal;
+        });
 
         let output = "<h2>Points</h2>";
 
@@ -540,7 +547,7 @@ class Formatter
 
             if (pilot != null && channel != null)
             {
-                output += "<li>" + pilot.Name + "</li>";
+                output += "<li>" + this.ToPilotNameLink(pilot) + "</li>";
 
                 pilots[pilot.ID] = pilot;
                 colors[pilot.ID] = channel.Color;
@@ -642,7 +649,7 @@ class Formatter
 
                 //$behind = FormatTime($lap->GetEnd() - $last_lap->GetEnd());
                 output += "<tr>";
-                output += "<td class=\"cell_text\">" + pilot.Name +  "</td>";
+                output += "<td class=\"cell_text\">" + this.ToPilotNameLink(pilot) +  "</td>";
                 output += "<td class=\"cell_numeric\">" + this.ToStringTime(length) +  "</td>";
                 output += "<td class=\"cell_numeric\">" + this.ToStringTime(behind) +  "</td>";
                 output += "<td class=\"cell_numeric\">" + this.ToStringPosition(position) +  "</td>";
@@ -701,11 +708,140 @@ class Formatter
         this.lastAction = () => { this.ShowRace(raceid); }
     }
 
+    async ShowPilot(pilotId)
+    {            
+        const eventDetails = await this.eventManager.GetEvent();
+
+        const lapCount = eventDetails.Laps;
+        const pbLaps = eventDetails.PBLaps;
+        const color = eventDetails.ChannelColors[0];
+
+        let pilotRecords = await this.eventManager.GetLapRecords(pbLaps, lapCount, (p) => { return p.ID == pilotId; });
+
+        // There will only be one.
+        let pilotRecord = pilotRecords[0];
+
+        var pilot = await eventManager.GetPilot(pilotId);
+
+        let graph = new Graph(this.document, "posgraph");
+
+        let output = "<h2>" + pilot.Name + "</h2>";
+       
+        let lapsOutput = "<div class=\"pilot_laps\">";
+
+        let rounds = await eventManager.GetRounds();
+
+        let totalLapCount = 0;
+        let totalRaceCount = 0;
+
+        let worstLap = 0;
+        let bestLap = 200;
+
+        for (const round of rounds)
+        {
+            if (round.Valid)
+            {
+                graph.AddXLabel("R" + round.RoundNumber, totalLapCount);
+
+                let races = await this.eventManager.GetRoundRaces(round.ID);
+                for (const race of races)
+                {
+                    if (race.Valid && eventManager.RaceHasPilot(race, pilotId))
+                    {
+                        lapsOutput += "<div class=\"pilot_lap\">";
+                        lapsOutput += "<h3>Round "  + round.RoundNumber + "</h3>";
+                        lapsOutput += '<table class=\"race_table\">';
+
+                        let laps = eventManager.GetValidLapsPilot(race, pilotId);
+                        for (const lap of laps)
+                        {
+                            const length = lap.LengthSeconds;
+                            lapsOutput += "<tr>";
+                            lapsOutput += "<td class=\"cell_text\">" + this.ToLapNumber(lap.LapNumber) +  "</td>";
+                            lapsOutput += "<td class=\"cell_numeric\">" + this.ToStringTime(length) +  "</td>";
+                            lapsOutput += "</tr>";
+
+                            if (lap.LapNumber != 0)
+                            {
+                                totalLapCount++;
+
+                                const path = graph.GetPath(pilot.Name, color);
+                                path.AddPoint(totalLapCount, length);
+
+
+                                if (worstLap < length)
+                                {
+                                    worstLap = length;
+                                }
+
+                                if (bestLap > length)
+                                {
+                                    bestLap = length;
+                                }
+                            }
+                        }
+                        lapsOutput += "</table>";
+                        lapsOutput += "</div>";
+                        totalRaceCount++;
+                    }
+                }
+            }
+        }
+        
+        lapsOutput += "</div>";
+
+        output += "<div class=\"details\">";
+        output += "<h3>Personal Records<h3>";
+        output += '<table class=\"race_table\">';
+
+        output += "<tr><td class=\"cell_text\">Holeshot</td><td class=\"cell_numeric\">" + this.LapsToTime(pilotRecord.holeshot) + "</td></tr>";
+        output += "<tr><td class=\"cell_text\">" + pbLaps + " Lap(s)</td><td class=\"cell_numeric\">" + this.LapsToTime(pilotRecord.lap) + "</td></tr>";
+        output += "<tr><td class=\"cell_text\">" + lapCount + " Lap(s)</td><td class=\"cell_numeric\">" + this.LapsToTime(pilotRecord.laps) + "</td></tr>";
+        output += "<tr><td class=\"cell_text\">Race time</td><td class=\"cell_numeric\">" + this.LapsToTime(pilotRecord.race) + "</td></tr>";
+        output += "<tr><td class=\"cell_text\">Lap Count </td><td class=\"cell_numeric\">" + totalLapCount + "</td></tr>";
+        output += "<tr><td class=\"cell_text\">Race Count </td><td class=\"cell_numeric\">" + totalRaceCount + "</td></tr>";
+        output += "</table>";
+
+        output += "<div class=\"graph\">";
+        output += "<h2>Lap times</h2><br>";
+        output += "<canvas class=\"graph\" id=\"posgraph\" width=\"800\" height=\"600\"> </canvas>";
+        output += "</div>";
+        
+        this.SetContent(output);
+        this.AppendContent(lapsOutput);
+
+        for (let i = Math.floor(bestLap); i < Math.ceil(worstLap); i++)
+        {
+            graph.AddYLabel(i, i);
+        }
+
+        const canvas = document.getElementById("posgraph");
+        graph.SetView(0, bestLap, totalLapCount, worstLap - bestLap);
+        graph.MakeGraph(canvas);
+
+        this.lastAction = () => { this.ShowPilot(pilotId); }
+    }
+
     FormatRoundsTable(rounds, pilotRecords)
     {
         let output = "<div class=\"columns\">";
         output += "<div class=\"row\" >";
         output += "<div class=\"pilots\">Pilots</div>";
+
+        let hasBrackets = false;
+        for (const pilotRecord of pilotRecords)
+        {
+            if (pilotRecord.bracket != "none" && pilotRecord.bracket != null)
+            {
+                hasBrackets = true;
+                break;
+            }
+        }
+
+        if (hasBrackets)
+        {
+            output += "<div class=\"bracket\">Bracket</div>";
+        }
 
         let addTotal = true;
         for (const round of rounds)
@@ -748,7 +884,16 @@ class Formatter
         for (const pilotRecord of pilotRecords)
         {
             output += "<div class=\"row\">";
-            output += "<div class=\"pilots\">" + pilotRecord.pilot.Name + "</div>";
+            output += "<div class=\"pilots\">" + this.ToPilotNameLink(pilotRecord.pilot) + "</div>";
+
+            if (hasBrackets)
+            {
+                let bracket = pilotRecord.bracket;
+                if (bracket == "none")
+                    bracket = "";
+
+                output += "<div class=\"bracket\">" + bracket + "</div>";
+            }
 
             for (const round of rounds)
             {
@@ -798,6 +943,13 @@ class Formatter
         return value.toFixed(2);
     }
 
+    ToLapNumber(number)
+    {
+        if (number == 0)
+            return "Holeshot";
+        return "Lap " + number;
+    }
+
     ToStringPosition(position)
     {
         let post = "th";
@@ -819,6 +971,11 @@ class Formatter
             return "";
 
         return position + post;
+    }
+
+    ToPilotNameLink(pilot)
+    {
+        return "<a href=\"#\" onclick=\"formatter.ShowPilot('" + pilot.ID + "')\">" + pilot.Name + "</a>";
     }
 
     async GetPrevCurrentNextRaceSummaries()
@@ -873,7 +1030,7 @@ class Formatter
 
             let pilotSummary = 
             {
-                PilotID : pilotId,
+                ID : pilotId,
                 Name : pilot.Name,
                 Position : 0,
                 Points : 0,
@@ -935,7 +1092,7 @@ class Formatter
             for(const index in summary.PilotSummaries)
             {
                 const pilotSummary = summary.PilotSummaries[index];
-                pilotSummary.Position = 1 + positions.indexOf(pilotSummary.PilotID);
+                pilotSummary.Position = 1 + positions.indexOf(pilotSummary.ID);
             }
         }
 

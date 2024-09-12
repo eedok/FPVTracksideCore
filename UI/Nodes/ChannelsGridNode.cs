@@ -97,25 +97,25 @@ namespace UI.Nodes
         {
             get
             {
-                if (ProfileSettings.Instance.ChannelGrid1)
+                if (ApplicationProfileSettings.Instance.ChannelGrid1)
                     yield return GridTypes.One;
-                if (ProfileSettings.Instance.ChannelGrid2)
+                if (ApplicationProfileSettings.Instance.ChannelGrid2)
                     yield return GridTypes.Two;
-                if (ProfileSettings.Instance.ChannelGrid3)
+                if (ApplicationProfileSettings.Instance.ChannelGrid3)
                     yield return GridTypes.Three;
-                if (ProfileSettings.Instance.ChannelGrid4)
+                if (ApplicationProfileSettings.Instance.ChannelGrid4)
                     yield return GridTypes.Four;
-                if (ProfileSettings.Instance.ChannelGrid6)
+                if (ApplicationProfileSettings.Instance.ChannelGrid6)
                     yield return GridTypes.Six;
-                if (ProfileSettings.Instance.ChannelGrid8)
+                if (ApplicationProfileSettings.Instance.ChannelGrid8)
                     yield return GridTypes.Eight;
-                if (ProfileSettings.Instance.ChannelGrid10)
+                if (ApplicationProfileSettings.Instance.ChannelGrid10)
                     yield return GridTypes.Ten;
-                if (ProfileSettings.Instance.ChannelGrid12)
+                if (ApplicationProfileSettings.Instance.ChannelGrid12)
                     yield return GridTypes.Twelve;
-                if (ProfileSettings.Instance.ChannelGrid12)
+                if (ApplicationProfileSettings.Instance.ChannelGrid12)
                     yield return GridTypes.Fifteen;
-                if (ProfileSettings.Instance.ChannelGrid16)
+                if (ApplicationProfileSettings.Instance.ChannelGrid16)
                     yield return GridTypes.Sixteen;
 
                 yield return GridTypes.SingleRow;
@@ -148,7 +148,7 @@ namespace UI.Nodes
             withOutLaps = new Size(400, 300);
             SingleSize = withLaps;
 
-            Alignment = ProfileSettings.Instance.AlignChannels;
+            Alignment = ApplicationProfileSettings.Instance.AlignChannels;
 
             RequestLayout();
 
@@ -246,7 +246,6 @@ namespace UI.Nodes
             {
                 ForceReOrder = forceReorder;
             }
-
             ForceUpdate = true;
             RequestLayout();
         }
@@ -287,27 +286,31 @@ namespace UI.Nodes
                     camNode.SetAnimatedVisibility(camNode.VideoBounds.ShowInGrid && extrasVisible);
                 }
 
-                int visibleCount = VisibleChildCount();
-                int gridItemCount = GridTypeItemCount(DecideLayout(visibleCount));
-
-                if (gridItemCount > visibleCount && !Replay && !LockGridType)
-                {
-                    gridStatsNode.SetAnimatedVisibility(true);
-                }
-                else
-                {
-                    gridStatsNode.SetAnimatedVisibility(false);
-                }
+                CheckGridStatsVisiblilty();
             }
 
             base.UpdateVisibility(input);
         }
 
+        private void CheckGridStatsVisiblilty()
+        {
+            int visibleCount = VisibleChildCount();
+            GridTypes gridTypeDecided = DecideLayout(visibleCount);
+            int gridItemCount = GridTypeItemCount(gridTypeDecided);
+
+            if (gridItemCount > visibleCount && !Replay && !LockGridType && gridTypeDecided != GridTypes.SingleRow)
+            {
+                gridStatsNode.SetAnimatedVisibility(true);
+            }
+            else
+            {
+                gridStatsNode.SetAnimatedVisibility(false);
+            }
+        }
+
         public void SetReorderType(ReOrderTypes reOrderType)
         {
             ReOrderType = reOrderType;
-            ForceReOrder = true;
-            Reorder();
         }
 
         public override IEnumerable<Node> OrderedChildren(IEnumerable<Node> input)
@@ -319,11 +322,11 @@ namespace UI.Nodes
                 reOrderType = ReOrderTypes.ChannelOrder;
             }
 
-            if (ProfileSettings.Instance.ReOrderDelaySeconds != 0f && !ForceReOrder)
+            if (ApplicationProfileSettings.Instance.ReOrderDelaySeconds != 0f && !ForceReOrder)
             {
                 if (reOrderRequest == DateTime.MaxValue)
                 {
-                    reOrderRequest = DateTime.Now.AddSeconds(ProfileSettings.Instance.ReOrderDelaySeconds);
+                    reOrderRequest = DateTime.Now.AddSeconds(ApplicationProfileSettings.Instance.ReOrderDelaySeconds);
                     reOrderType = ReOrderTypes.None;
                 }
                 else if (reOrderRequest < DateTime.Now)
@@ -418,7 +421,7 @@ namespace UI.Nodes
             channelNode.SetPilot(pilotChannel.Pilot);
             channelNode.SetAnimationTime(CurrentAnimationTime);
             channelNode.SetAnimatedVisibility(true);
-            channelNode.CrashedOutType = CrashOutType.None;
+            channelNode.SetCrashedOutType(CrashOutType.None);
 
             bool isRace = EventManager.RaceManager.EventType != EventTypes.Freestyle;
             channelNode.SetLapsVisible(isRace);
@@ -430,9 +433,7 @@ namespace UI.Nodes
                 n.UpdatePosition(null);
             }
 
-            ForceUpdate = true;
-            ForceReOrder = true;
-            RequestLayout();
+            Reorder(true);
             return channelNode;
         }
 
@@ -441,10 +442,10 @@ namespace UI.Nodes
             extrasVisible = visible;
             foreach (CamGridNode camNode in CamNodes)
             {
-                camNode.SetAnimatedVisibility(visible);
+                camNode.SetAnimatedVisibility(camNode.VideoBounds.ShowInGrid && extrasVisible);
             }
 
-            gridStatsNode.SetAnimatedVisibility(visible);
+            CheckGridStatsVisiblilty();
         }
 
         public void SetBiggerInfo(bool biggerChannel, bool biggerResults)
@@ -528,7 +529,7 @@ namespace UI.Nodes
                 channelNodeBase.RequestReorder += Reorder;
 
                 channelNodeBase.RelativeBounds = new RectangleF(0.45f, 0.45f, 0.1f, 0.1f);
-                channelNodeBase.Layout(Bounds);
+                channelNodeBase.Layout(BoundsF);
                 channelNodeBase.Snap();
 
                 return channelNodeBase;
@@ -547,10 +548,8 @@ namespace UI.Nodes
             {
                 channelNode.SetPilot(null);
                 channelNode.SetAnimatedVisibility(false);
-                                
-                ForceUpdate = true;
-                ForceReOrder = true;
-                RequestLayout();
+
+                Reorder(true);
             }
         }
 
@@ -594,10 +593,7 @@ namespace UI.Nodes
                 cn.SetPilot(null);
                 cn.SetAnimatedVisibility(false);
             }
-
-            ForceUpdate = true;
-            ForceReOrder = true;
-            RequestLayout();
+            Reorder(true);
         }
 
         public void SetPilotVisible(Pilot p, bool visible)
@@ -656,12 +652,12 @@ namespace UI.Nodes
                     foreach (ChannelNodeBase cn in pilotNodes)
                     {
                         cn.SetAnimatedVisibility(false);
-                        cn.CrashedOutType = ChannelNodeBase.CrashOutType.Manual;
+                        cn.SetCrashedOutType(CrashOutType.FullScreen);
                     }
                 }
 
                 fullScreen.SetAnimatedVisibility(true);
-                fullScreen.CrashedOutType = ChannelNodeBase.CrashOutType.None;
+                fullScreen.SetCrashedOutType(CrashOutType.None);
 
                 RequestLayout();
             }
@@ -703,7 +699,7 @@ namespace UI.Nodes
                 foreach (ChannelNodeBase cn in pilotNodes)
                 {
                     cn.SetAnimatedVisibility(true);
-                    cn.CrashedOutType = ChannelNodeBase.CrashOutType.None;
+                    cn.SetCrashedOutType(CrashOutType.None);
                 }
 
                 RequestLayout();
@@ -746,9 +742,9 @@ namespace UI.Nodes
             {
                 if (cn != null)
                 {
-                    if (!cn.Finished && cn.CrashedOutType != ChannelNodeBase.CrashOutType.Manual)
+                    if (!cn.Finished && cn.CrashedOutType != ChannelNodeBase.CrashOutType.Manual && cn.CrashedOutType != ChannelNodeBase.CrashOutType.FullScreen)
                     {
-                        cn.CrashedOutType = crashed ? ChannelNodeBase.CrashOutType.Auto : ChannelNodeBase.CrashOutType.None;
+                        cn.SetCrashedOutType(crashed ? ChannelNodeBase.CrashOutType.Auto : ChannelNodeBase.CrashOutType.None);
                     }
                 }
                 Reorder();
@@ -837,8 +833,7 @@ namespace UI.Nodes
         {
             if (reOrderRequest != DateTime.MinValue && DateTime.Now > reOrderRequest)
             {
-                RequestLayout();
-                ForceUpdate = true;
+                Reorder(true);
             }
         }
 
@@ -924,7 +919,7 @@ namespace UI.Nodes
                     }
                     else
                     {
-                        channelNode.CrashedOutType = ChannelNodeBase.CrashOutType.None;
+                        channelNode.SetCrashedOutType(CrashOutType.None);
                     }
                 }
             }

@@ -12,6 +12,8 @@ namespace Composition.Input
         public Point Position { get; set; }
         public Point OldPosition { get; set; }
 
+        public Point PositionChange { get { return Position - OldPosition; } }
+
         public int WheelChange { get; set; }
         public ButtonStates ButtonState { get; set; }
 
@@ -44,6 +46,19 @@ namespace Composition.Input
             Translation = translation + mouseInputEvent.Translation;
 
             id = Guid.NewGuid();    
+        }
+
+        public MouseInputEvent(MouseInputEvent mouseInputEvent, Point translatedPosition, Point translatedOldPosition)
+        {
+            Creation = mouseInputEvent.Creation;
+            Button = mouseInputEvent.Button;
+            Position = translatedPosition;
+            OldPosition = translatedOldPosition;
+            WheelChange = mouseInputEvent.WheelChange;
+            ButtonState = mouseInputEvent.ButtonState;
+            EventType = mouseInputEvent.EventType;
+
+            id = Guid.NewGuid();
         }
 
         public MouseInputEvent(ButtonStates buttonState, MouseButtons button, Point position)

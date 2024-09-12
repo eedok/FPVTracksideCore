@@ -191,7 +191,7 @@ namespace UI.Nodes
                 { "{bracket}", "Bracket (A, B, Winners, Losers..)"},
                 { "{band}", "Channel band (Fatshark, Raceband..)"},
                 { "{channel}", "Channel number  (1, 2..)"},
-                { "{pilots}", "Pilots and their respective channels"},
+                { "{pilots}", "Pilots"},
                 { "{s}", "Will be an 's' if {count} isn't '1'. Helps you say '2 laps', not '2 lap' and '1 lap' not '1 laps'."},
 
             };
@@ -422,41 +422,14 @@ namespace UI.Nodes
         }
     }
 
-    class GeneralSettingsEditor : ObjectEditorNode<GeneralSettings>
+    class SettingsEditor : ObjectEditorNode<ApplicationProfileSettings>
     {
-        public GeneralSettingsEditor(GeneralSettings toEdit)
+        public SettingsEditor(ApplicationProfileSettings toEdit)
             : base(toEdit, false, true, false)
         {
         }
 
-        protected override PropertyNode<GeneralSettings> CreatePropertyNode(GeneralSettings obj, PropertyInfo pi)
-        {
-            if (pi.Name == "InverseResolutionScalePercent")
-            {
-                int[] scales = new int[] { 50, 75, 100, 125, 150, 200 };
-                ListPropertyNode<GeneralSettings> listPropertyNode = new ListPropertyNode<GeneralSettings>(obj, pi, ButtonBackground, TextColor, ButtonHover, scales);
-                return listPropertyNode;
-            }
-
-            if (pi.Name == "NotificationSerialPort")
-            {
-                return new ComPortPropertyNode<GeneralSettings>(obj, pi, ButtonBackground, TextColor, ButtonHover);
-            }
-
-            return base.CreatePropertyNode(obj, pi);
-        }
-
-    }
-
-
-    class ProfileSettingsEditor : ObjectEditorNode<ProfileSettings>
-    {
-        public ProfileSettingsEditor(ProfileSettings toEdit)
-            : base(toEdit, false, true, false)
-        {
-        }
-
-        protected override PropertyNode<ProfileSettings> CreatePropertyNode(ProfileSettings obj, PropertyInfo pi)
+        protected override PropertyNode<ApplicationProfileSettings> CreatePropertyNode(ApplicationProfileSettings obj, PropertyInfo pi)
         {
             if (pi.Name == "Voice")
             {
@@ -464,12 +437,24 @@ namespace UI.Nodes
                 return listPropertyNode;
             }
 
+            if (pi.Name == "InverseResolutionScalePercent")
+            {
+                int[] scales = new int[] { 50, 75, 100, 125, 150, 200 };
+                ListPropertyNode<ApplicationProfileSettings> listPropertyNode = new ListPropertyNode<ApplicationProfileSettings>(obj, pi, ButtonBackground, TextColor, ButtonHover, scales);
+                return listPropertyNode;
+            }
+
+            if (pi.Name == "NotificationSerialPort")
+            {
+                return new ComPortPropertyNode<ApplicationProfileSettings>(obj, pi, ButtonBackground, TextColor, ButtonHover);
+            }
+
             return base.CreatePropertyNode(obj, pi);
         }
 
-        private class VoicesPropertyNode : ListPropertyNode<ProfileSettings>
+        private class VoicesPropertyNode : ListPropertyNode<ApplicationProfileSettings>
         {
-            public VoicesPropertyNode(ProfileSettings obj, PropertyInfo pi, Color background, Color textColor, Color hover)
+            public VoicesPropertyNode(ApplicationProfileSettings obj, PropertyInfo pi, Color background, Color textColor, Color hover)
                 : base(obj, pi, background, textColor, hover)
             {
             }
@@ -485,7 +470,6 @@ namespace UI.Nodes
         }
     }
 
-
     class KeyboardShortcutsEditor : ObjectEditorNode<KeyboardShortcuts>
     {
         public KeyboardShortcutsEditor(KeyboardShortcuts toEdit)
@@ -499,6 +483,16 @@ namespace UI.Nodes
         public ShortcutKeyPropertyNode(T obj, PropertyInfo pi, Color textColor)
             : base(obj, pi, textColor)
         {
+        }
+
+        public override string ValueToString(object value)
+        {
+            if (value == null)
+            {
+                return "None";
+            }
+
+            return base.ValueToString(value);
         }
 
         public override bool OnMouseInput(MouseInputEvent mouseInputEvent)
@@ -642,7 +636,7 @@ namespace UI.Nodes
 
         private void CheckVisible()
         {
-            foreach (var propertyNode in GetPropertyNodes)
+            foreach (var propertyNode in PropertyNodes)
             {
                 if (propertyNode == null)
                     continue;
@@ -864,6 +858,141 @@ namespace UI.Nodes
             : base(config) 
         {
             Scale(0.8f, 1f);
+        }
+    }
+
+    public class SectorEditor : ObjectEditorNode<Sector> 
+    {
+        private TrackFlightPath trackFlightPath;
+
+        public Units Units
+        {
+            get
+            {
+                return ApplicationProfileSettings.Instance.Units;
+            }
+        }
+
+        public SectorEditor(Event eventt, TrackFlightPath trackFlightPath)
+            : base(false)
+        {
+            this.trackFlightPath = trackFlightPath;
+            
+            Scale(0.8f, 1f);
+
+            IEnumerable<Sector> sectors = null;
+            if (eventt.Sectors != null && eventt.Sectors.Any())
+            {
+                sectors = eventt.Sectors;
+            }
+            else
+            {
+                sectors = trackFlightPath.Sectors;
+            }
+
+            if (sectors == null)
+            {
+                sectors = new Sector[0];
+            }
+
+            Objects = sectors.ToList();
+
+            SetObjects(sectors, true, true);
+        }
+
+        protected override void AddNew(Sector t)
+        {
+            t.Number = Objects.Count + 1;
+            base.AddNew(t);
+        }
+
+        protected override PropertyNode<Sector> CreatePropertyNode(Sector obj, PropertyInfo pi)
+        {
+            if (pi.Name == "Length")
+            {
+                return new LengthPropertyNode(obj, pi, ButtonBackground, TextColor, Units);
+            }
+
+            if (pi.Name == "TrackElementStartIndex" || pi.Name == "TrackElementEndIndex")
+            {
+                if (trackFlightPath.Track != null)
+                {
+                    return new TrackElementSelectorPropertyNode(obj, pi, ButtonBackground, TextColor, ButtonHover, trackFlightPath.Track.TrackElements);
+                }
+                return null;
+            }
+
+            return base.CreatePropertyNode(obj, pi);
+        }
+
+        public class LengthPropertyNode : NumberPropertyNode<Sector>
+        {
+            public Units Units { get; private set; }    
+
+            public LengthPropertyNode(Sector obj, PropertyInfo pi, Color textBackground, Color textColor, Units units) 
+                : base(obj, pi, textBackground, textColor)
+            {
+                Units = units;
+            }
+
+            protected override void SetValue(object value)
+            {
+                string str = value.ToString();
+                str = str.Replace("ft", "");
+                str = str.Replace("m", "");
+
+                if (float.TryParse(str, out float fl))
+                {
+                    Object.SetLengthHuman(Units, fl);
+                }
+            }
+
+            public override string ValueToString(object value)
+            {
+                return Object.GetLengthHuman(Units);
+            }
+        }
+
+        public class TrackElementSelectorPropertyNode : ListPropertyNode<Sector>
+        {
+            public TrackElementSelectorPropertyNode(Sector obj, PropertyInfo pi, Color textBackground, Color textColor, Color hover, IEnumerable<TrackElement> options)
+                : base(obj, pi, textBackground, textColor, hover, options.ToArray())
+            {
+                RequestUpdateFromObject();
+            }
+
+            protected override void SetValue(object value)
+            {
+                if (value is TrackElement)
+                {
+                    TrackElement element = (TrackElement)value;
+                    value = Options.IndexOf(element);
+                    base.SetValue(value);
+                }
+            }
+
+            public override string ValueToString(object value)
+            {
+                if (value is int && Options != null)
+                {
+                    int index = (int)value;
+
+                    if (Options.Count > index)
+                    {
+                        int number = index + 1;
+
+                        return Options[index].ToString() + " " + number;
+                    }
+                }
+
+                if (value is TrackElement)
+                {
+                    int number = Options.IndexOf(value) + 1;
+                    return value.ToString() + " " + number;
+                }
+
+                return base.ValueToString(value);
+            }
         }
     }
 }

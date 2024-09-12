@@ -44,6 +44,7 @@ namespace UI.Nodes
         {
             Clear,
             PreRace,
+            VideoCheck,
             Race,
             FinishLine,
             RaceResults,
@@ -59,11 +60,11 @@ namespace UI.Nodes
 
         public TimeSpan AfterRaceStart { get; private set; }
 
-        public bool PreRaceScene { get { return ProfileSettings.Instance.PreRaceScene; } }
-        public bool PostRaceScene { get { return ProfileSettings.Instance.PostRaceScene; } }
+        public bool PreRaceScene { get { return ApplicationProfileSettings.Instance.PreRaceScene; } }
+        public bool PostRaceScene { get { return ApplicationProfileSettings.Instance.PostRaceScene; } }
 
         public TimeSpan SetupAnimationTime { get { return TimeSpan.FromSeconds(0.5f); } }
-        public TimeSpan MidRaceAnimationTime { get { return TimeSpan.FromSeconds(ProfileSettings.Instance.ReOrderAnimationSeconds); } }
+        public TimeSpan MidRaceAnimationTime { get { return TimeSpan.FromSeconds(ApplicationProfileSettings.Instance.ReOrderAnimationSeconds); } }
 
         private AutoRunnerTimerNode autoRunnerTimerNode;
 
@@ -307,7 +308,7 @@ namespace UI.Nodes
             switch (scene)
             {
                 case Scenes.PreRace:
-                    if (ProfileSettings.Instance.PilotOrderPreRace == GeneralSettings.OrderTypes.PositionAndPB)
+                    if (ApplicationProfileSettings.Instance.PilotOrderPreRace == ApplicationProfileSettings.OrderTypes.PositionAndPB)
                     {
                         ChannelsGridNode.SetReorderType(ChannelsGridNode.ReOrderTypes.PositionOrder);
                     }
@@ -315,9 +316,11 @@ namespace UI.Nodes
                     {
                         ChannelsGridNode.SetReorderType(ChannelsGridNode.ReOrderTypes.ChannelOrder);
                     }
+                    ChannelsGridNode.Reorder(true);
                     break;
+
                 case Scenes.Race:
-                    if (ProfileSettings.Instance.PilotOrderMidRace == GeneralSettings.OrderTypes.PositionAndPB)
+                    if (ApplicationProfileSettings.Instance.PilotOrderMidRace == ApplicationProfileSettings.OrderTypes.PositionAndPB)
                     {
                         ChannelsGridNode.SetReorderType(ChannelsGridNode.ReOrderTypes.PositionOrder);
                     }
@@ -325,9 +328,11 @@ namespace UI.Nodes
                     {
                         ChannelsGridNode.SetReorderType(ChannelsGridNode.ReOrderTypes.ChannelOrder);
                     }
+                    // intentionally no reorder call here.
                     break;
+
                 case Scenes.RaceResults:
-                    if (ProfileSettings.Instance.PilotOrderPostRace == GeneralSettings.OrderTypes.PositionAndPB)
+                    if (ApplicationProfileSettings.Instance.PilotOrderPostRace == ApplicationProfileSettings.OrderTypes.PositionAndPB)
                     {
                         ChannelsGridNode.SetReorderType(ChannelsGridNode.ReOrderTypes.PositionOrder);
                     }
@@ -335,8 +340,10 @@ namespace UI.Nodes
                     {
                         ChannelsGridNode.SetReorderType(ChannelsGridNode.ReOrderTypes.ChannelOrder);
                     }
+                    ChannelsGridNode.Reorder(true);
                     break;
             }
+
         }
 
         private void SceneLayout(Scenes scene)
@@ -346,14 +353,13 @@ namespace UI.Nodes
 
             float launchFinishWidth = 0.7f;
             IEnumerable<Node> commentatorCams = commentatorsAndSummary.VisibleChildren;
-
             switch (scene)
             {
+                case Scenes.VideoCheck:
                 case Scenes.PreRace:
                     ChannelsGridNode.LockGridType = false;
 
                     SetAnimationTime(SetupAnimationTime);
-
 
                     launchCamsNode.SetAnimatedVisibility(true);
                     commentatorsAndSummary.SetAnimatedVisibility(true);
@@ -385,7 +391,11 @@ namespace UI.Nodes
                     }
 
                     ChannelsGridNode.SetBiggerInfo(true, false);
-                    ChannelsGridNode.SetProfileVisible(ChannelNodeBase.PilotProfileOptions.Large);
+
+                    if (scene == Scenes.VideoCheck)
+                        ChannelsGridNode.SetProfileVisible(ChannelNodeBase.PilotProfileOptions.Small);
+                    else
+                        ChannelsGridNode.SetProfileVisible(ChannelNodeBase.PilotProfileOptions.Large);
 
                     launchCamsNode.RelativeBounds = new RectangleF(0, 0, launchFinishWidth, nonChannelGridHeight);
 

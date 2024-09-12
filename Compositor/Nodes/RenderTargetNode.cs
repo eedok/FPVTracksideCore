@@ -11,9 +11,9 @@ using Tools;
 
 namespace Composition.Nodes
 {
-    public class RenderTargetNode : ImageNode, IUpdateableNode, IPreProcessable
+    public class RenderTargetNode : ImageNode, IUpdateableNode, IPreProcessable, IScrollableNode
     {
-        private RenderTarget2D renderTarget
+        protected RenderTarget2D renderTarget
         {
             get
             {
@@ -26,7 +26,7 @@ namespace Composition.Nodes
         }
 
         private object renderTargetLock;
-        private Drawer drawer;
+        protected Drawer drawer;
 
         private Size size;
         public Size Size
@@ -49,7 +49,13 @@ namespace Composition.Nodes
         private Rectangle lastLayoutBounds;
 
         public ScrollerNode Scroller { get; private set; }
-
+        public Point ScrollOffset
+        {
+            get
+            {
+                return new Point((int)BoundsF.X, (int)BoundsF.Y);
+            }
+        }
         public bool CanScroll
         {
             get
@@ -68,8 +74,9 @@ namespace Composition.Nodes
         private bool disposed;
 
         public HoverNode HoverNode { get; set; }
+        public Color ClearColor { get; set; }
 
-        private int lastDrawFrame;
+        protected int lastDrawFrame;
 
         public RenderTargetNode()
             : this(128, 128)
@@ -84,6 +91,7 @@ namespace Composition.Nodes
             renderTargetLock = new object();
             Scroller = new ScrollerNode(this, ScrollerNode.Types.VerticalRight);
             HoverNode = null;
+            ClearColor = Color.Transparent;
         }
 
         public override void Dispose()
@@ -109,12 +117,12 @@ namespace Composition.Nodes
         // Need to use basebounds as ImageNode over-rides the Bounds size based on image size. But our image size is dynamic..
         public override bool Contains(Point point)
         {
-            return BaseBounds.Contains(point);
+            return BaseBoundsF.Contains(point);
         }
 
-        public override void Layout(Rectangle parentBounds)
+        public override void Layout(RectangleF parentBounds)
         {
-            Bounds = CalculateRelativeBounds(parentBounds);
+            BoundsF = CalculateRelativeBounds(parentBounds);
 
             bool isAnimatingSize = IsAnimatingSize();
 
@@ -128,7 +136,7 @@ namespace Composition.Nodes
                         hasLayedOut = true;
                         NeedsLayout = false;
 
-                        LayoutChildren(new Rectangle(0, 0, Size.Width, Size.Height));
+                        LayoutChildren(new RectangleF(0, 0, Size.Width, Size.Height));
                         NeedsDraw = true;
                         lastLayoutBounds = BaseBounds;
                     }
@@ -137,7 +145,7 @@ namespace Composition.Nodes
                 {
                     hasLayedOut = true;
                     NeedsLayout = false;
-                    LayoutChildren(new Rectangle(0, 0, Size.Width, Size.Height));
+                    LayoutChildren(new RectangleF(0, 0, Size.Width, Size.Height));
                     NeedsDraw = true;
                     lastLayoutBounds = BaseBounds;
                 }
@@ -146,7 +154,7 @@ namespace Composition.Nodes
 
             if (renderTarget != null && !isAnimatingSize)
             {
-                Rectangle actualBounds = new Rectangle(Bounds.X, Bounds.Y, Size.Width, Size.Height);
+                RectangleF actualBounds = new RectangleF(Bounds.X, Bounds.Y, Size.Width, Size.Height);
                 Scroller.Layout(actualBounds);
 
                 switch (Scroller.ScrollType)
@@ -254,12 +262,12 @@ namespace Composition.Nodes
             }
         }
 
-        public void Update(GameTime gameTime)
+        public virtual void Update(GameTime gameTime)
         {
             DebugTimer.DebugStartTime(this);
             if (NeedsLayout && Parent != null)
             {
-                Layout(Parent.Bounds);
+                Layout(Parent.BoundsF);
                 NeedsLayout = false;
                 NeedsDraw = true;
             }
@@ -267,7 +275,7 @@ namespace Composition.Nodes
             bool canRender = !LayoutDefinesSize || (LayoutDefinesSize && hasLayedOut);
             if (canRender && !disposed)
             {
-                //if (lastDrawFrame == CompositorLayer.FrameNumber)
+                if (lastDrawFrame == CompositorLayer.FrameNumber)
                 {
                     lock (renderTargetLock)
                     {
@@ -282,7 +290,13 @@ namespace Composition.Nodes
                         maxSize.Width = Math.Min(4096, maxSize.Width);
                         maxSize.Height = Math.Min(4096, maxSize.Height);
 
-                        if (renderTarget != null && !IsAnimating() && (maxSize.Width != renderTarget.Width || maxSize.Height != renderTarget.Height))
+                        bool isAnimating = false;
+                        if (Parent != null && Parent.IsAnimating())
+                        {
+                            isAnimating = true;
+                        }
+
+                        if (renderTarget != null && !isAnimating && (maxSize.Width != renderTarget.Width || maxSize.Height != renderTarget.Height))
                         {
                             renderTarget.Dispose();
                             renderTarget = null;
@@ -290,7 +304,7 @@ namespace Composition.Nodes
 
                         if (renderTarget == null && maxSize.Width > 0 && maxSize.Height > 0)
                         {
-                            renderTarget = new RenderTarget2D(drawer.GraphicsDevice, maxSize.Width, maxSize.Height);
+                            renderTarget = CreateRenderTarget(maxSize);
                             NeedsDraw = true;
                         }
                     }
@@ -299,7 +313,12 @@ namespace Composition.Nodes
             DebugTimer.DebugEndTime(this);
         }
 
-        public void PreProcess(Drawer id)
+        protected virtual RenderTarget2D CreateRenderTarget(Size maxSize)
+        {
+            return new RenderTarget2D(drawer.GraphicsDevice, maxSize.Width, maxSize.Height);
+        }
+
+        public virtual void PreProcess(Drawer id)
         {
             if (drawer != null)
             {
@@ -325,18 +344,17 @@ namespace Composition.Nodes
             {
                 try
                 {
-                    // Set the render target
-                    id.GraphicsDevice.SetRenderTarget(renderTarget);
-                    id.GraphicsDevice.Clear(Color.Transparent);
-//#if DEBUG
-//                    Random r = new Random(lastDrawFrame);
-//                    id.GraphicsDevice.Clear(new Color((float)r.NextDouble(), (float)r.NextDouble(), (float)r.NextDouble()));
-//#endif
                     if (id != null)
                     {
-                        id.Begin();
+                        // Set the render target
+                        id.GraphicsDevice.SetRenderTarget(renderTarget);
+                        id.GraphicsDevice.Clear(ClearColor);
+                        //#if DEBUG
+                        //                    Random r = new Random(lastDrawFrame);
+                        //                    id.GraphicsDevice.Clear(new Color((float)r.NextDouble(), (float)r.NextDouble(), (float)r.NextDouble()));
+                        //#endif
+
                         DrawContent(id);
-                        id.End();
                     }
                 }
                 catch
@@ -359,12 +377,17 @@ namespace Composition.Nodes
                     id.GraphicsDevice.SetRenderTarget(null);
                 }
             }
-            Parent?.RequestRedraw();
+            if (drawer != null && drawer.CanMultiThread)
+            {
+                Parent?.RequestRedraw();
+            }
         }
 
         protected virtual void DrawContent(Drawer id)
         {
+            id.Begin();
             DrawChildren(id, 1);
+            id.End();
         }
 
         public override void RequestLayout()
@@ -405,7 +428,7 @@ namespace Composition.Nodes
                 return true;
             }
 
-            if (BaseBounds.Contains(mouseInputEvent.Position) || mouseInputEvent is MouseInputLeaveEvent)
+            if (BaseBoundsF.Contains(mouseInputEvent.Position) || mouseInputEvent is MouseInputLeaveEvent)
             {
                 MouseInputEvent translated = Translate(mouseInputEvent);
                 return base.OnMouseInput(translated);
@@ -415,7 +438,6 @@ namespace Composition.Nodes
 
         public MouseInputEvent Translate(MouseInputEvent input)
         {
-           
             Point translation = new Point(-Bounds.X, -Bounds.Y);
 
             if (Scroller != null)

@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -22,6 +23,8 @@ namespace Composition.Nodes
             get { return text; }
             set
             {
+                //Debug.Assert(value != null);
+
                 if (text != value)
                 {
                     text = value;
@@ -143,7 +146,19 @@ namespace Composition.Nodes
                     scale = Composition.Text.Scale.Disallowed;
                 }
 
-                textRenderer.Draw(id, Bounds, Alignment, scale, Tint, parentAlpha * Alpha);
+                // Don't draw if geometry is wrong.
+                if (needsUpdate != UpdateTypes.Geometry)
+                {
+                    // Use floats when animating, ints when static
+                    if (isAnimatingSize)
+                    {
+                        textRenderer.Draw(id, BoundsF, Alignment, scale, Tint, parentAlpha * Alpha);
+                    }
+                    else
+                    {
+                        textRenderer.Draw(id, Bounds, Alignment, scale, Tint, parentAlpha * Alpha);
+                    }
+                }
             }
             catch
             {
@@ -216,11 +231,11 @@ namespace Composition.Nodes
             }
         }
 
-        public override void Layout(Microsoft.Xna.Framework.Rectangle parentBounds)
+        public override void Layout(RectangleF parentBounds)
         {
-            Microsoft.Xna.Framework.Rectangle oldBounds = Bounds;
+            RectangleF oldBounds = BoundsF;
             base.Layout(parentBounds);
-            if (oldBounds.Height != Bounds.Height && needsUpdate != UpdateTypes.Geometry)
+            if (oldBounds.Height != BoundsF.Height && needsUpdate != UpdateTypes.Geometry)
             {
                 needsUpdate = UpdateTypes.Size;
             }

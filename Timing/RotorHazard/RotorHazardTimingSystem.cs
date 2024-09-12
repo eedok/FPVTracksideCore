@@ -11,9 +11,22 @@ using Tools;
 using SocketIOClient;
 using System.Reflection;
 using System.Timers;
+using SocketIOClient.JsonSerializer;
 
 namespace Timing.RotorHazard
 {
+    public struct PilotInfo
+    {
+        public Guid ID { get; private set; }
+        public string Name { get; private  set; }
+
+        public PilotInfo(Guid id, string name)
+        {
+            ID = id;
+            Name = name;
+        }
+    }
+
     public class RotorHazardTimingSystem : ITimingSystemWithRSSI
     {
 
@@ -128,7 +141,8 @@ namespace Timing.RotorHazard
 
         private DateTime rotorhazardStart;
 
-        private string[] pilotCallsigns;
+        private RaceStartPilots raceStartPilots;
+
 
         public string Name
         {
@@ -239,7 +253,13 @@ namespace Timing.RotorHazard
             frequencySetup.b = newFrequencies.Select(nf => nf.Band[0]).ToArray();
             frequencySetup.c = newFrequencies.Select(nf => nf.Channel).ToArray();
             frequencySetup.f = newFrequencies.Select(nf => nf.Frequency).ToArray();
-            pilotCallsigns = newFrequencies.Select(nf => nf.Pilot).ToArray();
+
+            raceStartPilots = new RaceStartPilots()
+            {
+                p_id = newFrequencies.Select(r => r.PilotId.ToString()).ToArray(),
+                p = newFrequencies.Select(r => r.Pilot).ToArray(),
+                p_color = newFrequencies.Select(r => r.Color.ToHex()).ToArray()
+            };
 
             try
             {
@@ -457,7 +477,7 @@ namespace Timing.RotorHazard
             }
         }
 
-        public bool StartDetection(ref DateTime time)
+        public bool StartDetection(ref DateTime time, Guid raceId)
         {
             if (!Connected)
                 return false;
@@ -468,23 +488,21 @@ namespace Timing.RotorHazard
 
             using (Waiter responseWait = new Waiter())
             {
-                RaceStart raceStart = new RaceStart()
+                if (!settings.SyncPilotNames)
                 {
-                    start_time_s = serverStartTime.TotalSeconds
-                };
-
-                if (settings.SyncPilotNames)
-                {
-                    raceStart.p = pilotCallsigns;
+                    raceStartPilots = new RaceStartPilots();
                 }
 
+                raceStartPilots.start_time_s = serverStartTime.TotalSeconds;
+                raceStartPilots.race_id = raceId;
+                
                 socket?.EmitAsync("ts_race_stage", (r) =>
                 { 
                     if (responseWait.IsDisposed) 
                         return; 
 
                     responseWait.Set(); 
-                }, raceStart);
+                }, raceStartPilots);
 
                 if (!responseWait.WaitOne(CommandTimeOut))
                 {

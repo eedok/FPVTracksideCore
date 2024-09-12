@@ -321,7 +321,7 @@ namespace UI.Video
                 if (cbn.Pilot != null)
                 {
                     cbn.Visible = true;
-                    cbn.CrashedOutType = ChannelNodeBase.CrashOutType.None;
+                    cbn.SetCrashedOutType(ChannelNodeBase.CrashOutType.None);
                 }
             }
             ChannelsGridNode.Reorder();
@@ -384,7 +384,8 @@ namespace UI.Video
                         SeekNode.RequestLayout();
 
                         ChannelsGridNode.SetPlaybackTime(currentTime);
-                        ChannelsGridNode.SetReorderType(ProfileSettings.Instance.PilotOrderMidRace == GeneralSettings.OrderTypes.Channel ? ChannelsGridNode.ReOrderTypes.ChannelOrder : ChannelsGridNode.ReOrderTypes.PositionOrder);
+                        ChannelsGridNode.SetReorderType(ApplicationProfileSettings.Instance.PilotOrderMidRace == ApplicationProfileSettings.OrderTypes.Channel ? ChannelsGridNode.ReOrderTypes.ChannelOrder : ChannelsGridNode.ReOrderTypes.PositionOrder);
+                        ChannelsGridNode.Reorder();
                     }
                 }
             }

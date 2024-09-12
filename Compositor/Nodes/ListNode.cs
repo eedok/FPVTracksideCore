@@ -10,7 +10,7 @@ using Tools;
 
 namespace Composition.Nodes
 {
-    public class ListNode<T> : Node where T : Node
+    public class ListNode<T> : Node, IScrollableNode where T : Node
     {
         public enum ListStyles
         {
@@ -41,6 +41,14 @@ namespace Composition.Nodes
 
         public ScrollerNode Scroller { get; private set; }
 
+        public Point ScrollOffset
+        {
+            get
+            {
+                return Point.Zero;
+            }
+        }
+
         private Size size;
         public Size Size
         {
@@ -55,6 +63,8 @@ namespace Composition.Nodes
             }
         }
 
+        public bool Clip { get; set; }
+
         public ListNode(Microsoft.Xna.Framework.Color scrollColor)
         {
             Scroller = new ScrollerNode(this, ScrollerNode.Types.VerticalRight);
@@ -66,6 +76,7 @@ namespace Composition.Nodes
             LayoutInvisibleItems = true;
             BackgroundColors = null;
             ShrinkContentsForScrollers = true;
+            Clip = true;
         }
 
         public override void Dispose()
@@ -104,9 +115,17 @@ namespace Composition.Nodes
 
             Point offset = id.Offset;
 
-            id.PushClipRectangle(Bounds);
+            Rectangle bounds = Bounds;
 
-            id.Offset = new Point(0, -(int)Scroller.CurrentScrollPixels);
+            if (Clip)
+            {
+                id.PushClipRectangle(bounds);
+            }
+
+            if (Scroller != null)
+            {
+                id.Offset = new Point(0, -(int)Scroller.CurrentScrollPixels);
+            }
 
             Node[] t = Children;
             foreach (Node n in t)
@@ -120,8 +139,10 @@ namespace Composition.Nodes
                 }
             }
 
-
-            id.PopClipRectangle();
+            if (Clip)
+            {
+                id.PopClipRectangle();
+            }
 
             id.Offset = offset;
 
@@ -140,29 +161,32 @@ namespace Composition.Nodes
             return base.OnMouseInput(translated);
         }
 
-        public override void Layout(Rectangle parentBounds)
+        public override void Layout(RectangleF parentBounds)
         {
             Node[] items = LayoutInvisibleItems ? Children.ToArray() : VisibleChildren.ToArray();
             int contentSize = (items.Length * (ItemHeight + ItemPadding)) + ItemPadding;
 
-            Bounds = CalculateRelativeBounds(parentBounds);
+            BoundsF = CalculateRelativeBounds(parentBounds);
 
             Size = new Size(Bounds.Width, contentSize);
 
             base.Layout(parentBounds);
 
-            Scroller.ContentSizePixels = contentSize;
-            Scroller.ViewSizePixels = Bounds.Height;
-            Scroller.Layout(Bounds);
+            if (Scroller  != null)
+            {
+                Scroller.ContentSizePixels = contentSize;
+                Scroller.ViewSizePixels = Bounds.Height;
+                Scroller.Layout(BoundsF);
+            }
         }
 
-        protected override void LayoutChildren(Rectangle bounds)
+        protected override void LayoutChildren(RectangleF bounds)
         {
             Node[] items = LayoutInvisibleItems ? Children.ToArray() : VisibleChildren.ToArray();
             int contentSize = (items.Length * (ItemHeight + ItemPadding)) + ItemPadding;
 
-            int left = bounds.Left + ItemPadding;
-            int width = bounds.Width - (ItemPadding * 2);
+            float left = bounds.Left + ItemPadding;
+            float width = bounds.Width - (ItemPadding * 2);
 
             if (Scroller.Needed && Scroller.Visible && ShrinkContentsForScrollers)
             {
@@ -180,11 +204,11 @@ namespace Composition.Nodes
 
             if (ListStyle == ListStyles.TopDown)
             {
-                int prevBottom = bounds.Top;
+                float prevBottom = bounds.Top;
                 foreach (Node n in items)
                 {
                     n.RelativeBounds = new RectangleF(0, 0, 1, 1);
-                    n.Layout(new Rectangle(left,
+                    n.Layout(new RectangleF(left,
                                            prevBottom + ItemPadding,
                                            width,
                                            ItemHeight));
@@ -194,11 +218,11 @@ namespace Composition.Nodes
             }
             else
             {
-                int prevTop = contentSize + bounds.Top;
+                float prevTop = contentSize + bounds.Top;
                 foreach (Node n in items)
                 {
                     n.RelativeBounds = new RectangleF(0, 0, 1, 1);
-                    n.Layout(new Rectangle(left,
+                    n.Layout(new RectangleF(left,
                             prevTop - (ItemPadding + ItemHeight),
                             width,
                             ItemHeight));

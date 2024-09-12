@@ -68,7 +68,9 @@ namespace UI.Nodes
         {
             None,
             Auto,
-            Manual
+            Hidden,
+            Manual,
+            FullScreen,
         }
 
         public bool CrashedOut
@@ -79,7 +81,10 @@ namespace UI.Nodes
             }
         }
 
-        public CrashOutType CrashedOutType { get; set; }
+        public CrashOutType CrashedOutType { get; private set; }
+
+        public event Action<Channel, Pilot> OnCrashedOut;
+
         public bool Finished { get { return resultContainer.Visible; } }
            
         private ColorNode crashedOut;
@@ -211,6 +216,25 @@ namespace UI.Nodes
             needsSplitClear = true;
         }
 
+        public void SetCrashedOutType(CrashOutType type)
+        {
+            if (CrashedOutType == type)
+                return;
+
+            CrashedOutType = type;
+
+            switch (type)
+            {
+                case CrashOutType.Manual:
+                    EventManager.RaceManager.CrashedOut(Pilot, Channel, true);
+                    break;
+
+                case CrashOutType.Auto:
+                    EventManager.RaceManager.CrashedOut(Pilot, Channel, false);
+                    break;
+            }
+        }
+
         protected virtual Node CreateDisplayNode()
         {
             ColorNode mainNode = new ColorNode(Theme.Current.PilotViewTheme.NoVideoBackground);
@@ -240,7 +264,7 @@ namespace UI.Nodes
             //WidgetManager = new WidgetManagerNode();
             //DisplayNode.AddChild(WidgetManager);
 
-            if (ProfileSettings.Instance.ShowSplitTimes)
+            if (ApplicationProfileSettings.Instance.ShowSplitTimes)
             {
                 SplitsNode = new SplitsNode(EventManager);
                 SplitsNode.RelativeBounds = new RectangleF(0, LapsNode.RelativeBounds.Y - LapLineHeight, 1, LapLineHeight);
@@ -361,7 +385,7 @@ namespace UI.Nodes
             else
             {
                 OnCrashedOutClick.Invoke();
-                CrashedOutType = CrashOutType.Manual;
+                SetCrashedOutType(CrashOutType.Manual);
             }
         }
 
@@ -386,6 +410,8 @@ namespace UI.Nodes
             Pilot = pilot;
 
             pilotNameNode.SetPilot(Pilot);
+            CrashedOutType = CrashOutType.None;
+
 
             LapsNode.SetPilot(Pilot);
             if (SplitsNode != null)
@@ -428,6 +454,11 @@ namespace UI.Nodes
         {
             pilotProfileOptions = options;
 
+            if (ApplicationProfileSettings.Instance.AlwaysSmallPilotProfile && options == PilotProfileOptions.Large)
+            {
+                options = PilotProfileOptions.Small;
+            }
+
             // Don't do the small option if we're not a video node.
             if (this is not ChannelVideoNode)
             {
@@ -438,6 +469,7 @@ namespace UI.Nodes
             {
                 options = PilotProfileOptions.None;
             }
+
 
             switch (options)
             {
@@ -462,7 +494,7 @@ namespace UI.Nodes
 
                     PilotProfile.ProfileImageContainer.RelativeBounds = new RectangleF(0.4f, bottomOfName, 0.6f, 1 - bottomOfName);
                     PilotProfile.ProfileImageContainer.RelativeBounds = new RectangleF(0, 0, 1, 1);
-                    PilotProfile.RepeatVideo = ProfileSettings.Instance.PilotProfileRepeatVideo;
+                    PilotProfile.RepeatVideo = ApplicationProfileSettings.Instance.PilotProfileRepeatVideo;
                     break;
             }
         }
@@ -532,7 +564,7 @@ namespace UI.Nodes
 
                     raceSummary1.Text += "Fastest lap " + best.Length.ToStringRaceTime();
 
-                    if (EventManager.SpeedRecordManager.HasDistance)
+                    if (EventManager.SpeedRecordManager.DistanceManager.HasDistance)
                     {
                         IEnumerable<Split> splits = race.GetSplits(Pilot);
                         IEnumerable<float> speeds = EventManager.SpeedRecordManager.GetSpeeds(splits);
@@ -541,7 +573,7 @@ namespace UI.Nodes
                             float maxSpeed = speeds.Max();
                             if (maxSpeed > 0)
                             {
-                                raceSummary1.Text += " - " + EventManager.SpeedRecordManager.SpeedToString(maxSpeed, GeneralSettings.Instance.Units);
+                                raceSummary1.Text += " - " + EventManager.SpeedRecordManager.SpeedToString(maxSpeed, ApplicationProfileSettings.Instance.Units);
                             }
                         }
                     }
@@ -758,7 +790,7 @@ namespace UI.Nodes
                 {
                     if (showPosition)
                     {
-                        if (!ProfileSettings.Instance.AlwaysShowPosition)
+                        if (!ApplicationProfileSettings.Instance.AlwaysShowPosition)
                         {
                             recentPositionNode.SetTextAlpha(position.ToStringPosition());
                             recentPositionNode.Normal = 0;
@@ -785,7 +817,7 @@ namespace UI.Nodes
                 }
                 Position = position;
 
-                if (ProfileSettings.Instance.AlwaysShowPosition)
+                if (ApplicationProfileSettings.Instance.AlwaysShowPosition)
                 {
                     if (race.Started && !hasFinished)
                     {
@@ -812,7 +844,7 @@ namespace UI.Nodes
             {
                 if (holeshot)
                 {
-                    if (ProfileSettings.Instance.ReOrderAtHoleshot)
+                    if (ApplicationProfileSettings.Instance.ReOrderAtHoleshot)
                     {
                         RequestReorder?.Invoke();
                     }

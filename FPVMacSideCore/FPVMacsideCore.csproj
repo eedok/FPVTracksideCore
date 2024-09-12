@@ -7,6 +7,7 @@
     <TieredCompilation>false</TieredCompilation>
     <ImplicitUsings>true</ImplicitUsings>
     <Version>2.0.42.3</Version>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="bitmapfonts\**">
@@ -20,6 +21,7 @@
     <ProjectReference Include="..\..\FPVTracksideCore\Compositor\Composition.csproj" />
     <ProjectReference Include="..\..\FPVTracksideCore\UI\UI.csproj" />
     <ProjectReference Include="..\ffmpegMediaPlatform\FfmpegMediaPlatform.csproj" />
+    <ProjectReference Include="..\DB\DB.csproj" />
   </ItemGroup>
   <Target Name="RestoreDotnetTools" BeforeTargets="Restore">
     <Message Text="Restoring dotnet tools" Importance="High" />

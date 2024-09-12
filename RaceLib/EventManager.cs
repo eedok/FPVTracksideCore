@@ -42,6 +42,10 @@ namespace RaceLib
 
         public Profile Profile { get; private set; }
 
+        public TrackFlightPath FlightPath { get; set; }
+
+
+
         public EventManager(Profile profile)
         {
             Profile = profile;
@@ -247,6 +251,17 @@ namespace RaceLib
                     db.Update(Event);
                 }
             });
+
+            workQueue.Enqueue(workSet, "Loading Track", () =>
+            {
+                LoadTrack(Event.Track);
+            });
+        }
+
+        public void LoadTrack(Track track)
+        {
+            Event.Track = track;
+            FlightPath = new TrackFlightPath(Event.Track);
         }
 
         public IEnumerable<FileInfo> GetPilotProfileMedia()
@@ -290,7 +305,7 @@ namespace RaceLib
                             p.PhotoPath = matches.OrderByDescending(f => f.Extension).FirstOrDefault().FullName;
                         }
                     }
-                    if (p.PhotoPath != null)
+                    if (!string.IsNullOrEmpty(p.PhotoPath))
                     {
                         p.PhotoPath = Path.GetRelativePath(currentDirectory, p.PhotoPath);
                     }
@@ -601,12 +616,12 @@ namespace RaceLib
             }
         }
 
-        public string GetResultsText()
+        public string GetResultsText(Units units)
         {
             Race currentRace = RaceManager.CurrentRace;
             if (currentRace != null)
             {
-                string textResults = ResultManager.GetResultsText(currentRace);
+                string textResults = ResultManager.GetResultsText(currentRace, units);
 
                 return textResults;
             }

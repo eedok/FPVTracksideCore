@@ -33,6 +33,7 @@ namespace Composition.Nodes
 
         public event Action<BaseObjectEditorNode<T>> OnOK;
         public event Action<BaseObjectEditorNode<T>> OnCancel;
+        public event Action<BaseObjectEditorNode<T>> OnRefreshList;
 
         protected Node container;
         protected Node left;
@@ -63,9 +64,18 @@ namespace Composition.Nodes
 
         public bool NeedsRestart { get { return changes.Any(c => c.NeedsRestart); } }
 
-        public IEnumerable<PropertyNode<T>> GetPropertyNodes { get { return objectProperties.ChildrenOfType; } }
+        public IEnumerable<PropertyNode<T>> PropertyNodes { get { return objectProperties.ChildrenOfType; } }
 
         private bool needsDispose;
+
+        public bool Clip
+        {
+            set
+            {
+                objectProperties.Clip = value;
+                multiItemBox.Clip = value;
+            }
+        }
 
         public BaseObjectEditorNode(Color buttonBackground, Color buttonHover, Color textColor, Color scrollColor, bool hasButtons = true)
         {
@@ -283,6 +293,19 @@ namespace Composition.Nodes
             }
             multiItemBox.RequestLayout();
             RequestLayout();
+
+            OnRefreshList?.Invoke(this);
+        }
+
+        public void RefreshSelectedObjectProperties()
+        {
+            if (selected != null)
+            {
+                foreach (var property in PropertyNodes)
+                {
+                    property.RequestUpdateFromObject();
+                }
+            }
         }
 
         public virtual bool IsVisible(T t)
@@ -403,7 +426,7 @@ namespace Composition.Nodes
             multiItemBox.RequestLayout();
         }
 
-        protected void CreatePropertyNodes(T obj, IEnumerable<PropertyInfo> propertyInfos)
+        protected virtual void CreatePropertyNodes(T obj, IEnumerable<PropertyInfo> propertyInfos)
         {
             string lastCat = "";
             foreach (PropertyInfo pi in propertyInfos)
@@ -411,24 +434,21 @@ namespace Composition.Nodes
                 if (pi.GetAccessors(true)[0].IsStatic)
                     continue;
 
-                BrowsableAttribute ba = pi.GetCustomAttribute<BrowsableAttribute>();
-                if (ba != null && !ba.Browsable)
-                    continue;
-
-                ReadOnlyAttribute ro = pi.GetCustomAttribute<ReadOnlyAttribute>();
-                if (ro != null && ro.IsReadOnly)
-                    continue;
-
                 string category = "";
 
                 CategoryAttribute ca = pi.GetCustomAttribute<CategoryAttribute>();
                 if (ca != null)
+                {
                     category = ca.Category;
+                }
 
                 IEnumerable<PropertyNode<T>> newNodes = CreatePropertyNodes(obj, pi);
                 foreach (var newNode in newNodes)
                 {
-                    if (newNode != null && newNode.Category != "")
+                    if (newNode == null)
+                        continue;
+
+                    if (newNode.Category != "")
                     {
                         category = newNode.Category;
                     }
@@ -472,6 +492,14 @@ namespace Composition.Nodes
 
         protected virtual PropertyNode<T> CreatePropertyNode(T obj, PropertyInfo pi)
         {
+            BrowsableAttribute ba = pi.GetCustomAttribute<BrowsableAttribute>();
+            if (ba != null && !ba.Browsable)
+                return null;
+
+            ReadOnlyAttribute ro = pi.GetCustomAttribute<ReadOnlyAttribute>();
+            if (ro != null && ro.IsReadOnly)
+                return null;
+
             PropertyNode<T> newNode = null;
 
             bool HasPublicSetter = pi.GetSetMethod() != null;
@@ -668,7 +696,7 @@ namespace Composition.Nodes
             return Activator.CreateInstance<T>();
         }
 
-        private void OkButton_OnClick(MouseInputEvent mie)
+        protected void OkButton_OnClick(MouseInputEvent mie)
         {
             if (CompositorLayer != null)
             {
@@ -680,7 +708,7 @@ namespace Composition.Nodes
             needsDispose = true;
         }
 
-        private void CancelButton_OnClick(MouseInputEvent mie)
+        protected void CancelButton_OnClick(MouseInputEvent mie)
         {
             foreach (Change c in changes)
             {
@@ -700,7 +728,12 @@ namespace Composition.Nodes
 
         public override bool OnDrop(MouseInputEvent finalInputEvent, Node node)
         {
-            int y = finalInputEvent.Position.Y  - multiItemBox.Bounds.Y;
+            int y = finalInputEvent.Position.Y;
+
+            y += (int)multiItemBox.Scroller.CurrentScrollPixels;
+
+            Point adjustedMouse = finalInputEvent.Position;
+            adjustedMouse.Y = y;
 
             ItemNode<T> dropped = node as ItemNode<T>;
             if (dropped != null && left.Contains(finalInputEvent.Position))
@@ -708,7 +741,7 @@ namespace Composition.Nodes
                 int index = Objects.Count - 1;
                 foreach (ItemNode<T> other in multiItemBox.ChildrenOfType)
                 {
-                    if (other.Bounds.Bottom >= y)
+                    if (other.Bounds.Contains(adjustedMouse))
                     {
                         index = Objects.IndexOf(other.Item);
                         break;
@@ -717,6 +750,7 @@ namespace Composition.Nodes
 
                 Objects.Remove(dropped.Item);
                 Objects.Insert(index, dropped.Item);
+
 
                 RefreshList();
             }
@@ -934,10 +968,7 @@ namespace Composition.Nodes
         {
             object value = PropertyInfo.GetValue(Object, null);
 
-            if (value != null)
-            {
-                Value.Text = ValueToString(value);
-            }
+            Value.Text = ValueToString(value);
         }
 
         protected override void SetValue(object value)
@@ -956,6 +987,10 @@ namespace Composition.Nodes
 
         public virtual string ValueToString(object value)
         {
+            if (value == null)
+            {
+                return "";
+            }
             return value.ToString();
         }
     }
@@ -1277,6 +1312,9 @@ namespace Composition.Nodes
 
         public override string ValueToString(object obj)
         {
+            if (obj == null)
+                return "";
+
             TimeSpan value = (TimeSpan)obj;
             if (value != default(TimeSpan))
             {
@@ -1406,6 +1444,9 @@ namespace Composition.Nodes
 
         public override string ValueToString(object value)
         {
+            if (value == null)
+                return "";
+
             return value.ToString().CamelCaseToHuman();
         }
 

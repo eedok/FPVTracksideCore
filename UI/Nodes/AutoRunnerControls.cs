@@ -60,6 +60,8 @@ namespace UI.Nodes
             moreTimeNode.RelativeBounds = new RectangleF(0.5f, bottomButtonHeight, 0.5f, 1 - bottomButtonHeight);
             moreTimeNode.OnClick += MoreTimeNode_OnClick;
             bottomButtonsContainer.AddChild(moreTimeNode);
+
+            bottomButtonsContainer.Visible = false;
         }
 
         private void ControlButton_OnClick(Composition.Input.MouseInputEvent mie)
@@ -77,7 +79,7 @@ namespace UI.Nodes
             AutoRunner.Timer -= TimeSpan.FromSeconds(10);
         }
 
-        public override void Layout(Rectangle parentBounds)
+        public override void Layout(RectangleF parentBounds)
         {
             if (LargeMode) 
             {

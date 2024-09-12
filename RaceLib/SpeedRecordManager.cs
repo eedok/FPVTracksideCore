@@ -18,13 +18,10 @@ namespace RaceLib
     {
         public TimingSystemManager TimingSystemManager { get; private set; }
         public RaceManager RaceManager { get; private set; }
-
-        private Dictionary<int, float> timingSystemIndexDistance;
+        public EventManager EventManager { get; private set; }
 
         private Dictionary<Pilot, SpeedRecord> speedRecords;
         private float maxSpeed;
-
-        public bool HasDistance { get; private set; }
 
         public event Action<Split, float> OnNewPersonalBest;
         public event Action<Split, float> OnNewOveralBest;
@@ -32,9 +29,13 @@ namespace RaceLib
 
         const int MaxValidSpeed = 200; // m/s
 
+        public DistanceManager DistanceManager { get; private set; }
+
         public SpeedRecordManager(RaceManager raceManager)
         {
-            timingSystemIndexDistance = null;
+            DistanceManager = new DistanceManager();
+
+            EventManager = raceManager.EventManager;
             RaceManager = raceManager;
 
             TimingSystemManager = raceManager.TimingSystemManager;
@@ -50,7 +51,7 @@ namespace RaceLib
         public void Update()
         {
             maxSpeed = 0;
-            if (!HasDistance)
+            if (!DistanceManager.HasDistance)
                 return;
 
             foreach (Race race in RaceManager.GetRaces(r => r.Started))
@@ -67,7 +68,7 @@ namespace RaceLib
 
         public void UpdatePilot(Pilot pi)
         {
-            if (!HasDistance)
+            if (!DistanceManager.HasDistance)
                 return;
 
             speedRecords.Remove(pi);
@@ -100,7 +101,7 @@ namespace RaceLib
 
         private void RaceManager_OnLapDetected(Lap lap)
         {
-            if (!HasDistance)
+            if (!DistanceManager.HasDistance)
                 return;
 
             if (lap != null && lap.Race != null)
@@ -115,7 +116,7 @@ namespace RaceLib
 
         private void RaceManager_OnSplitDetection(Detection detection)
         {
-            if (!HasDistance)
+            if (!DistanceManager.HasDistance)
                 return;
 
             Race race = RaceManager.CurrentRace;
@@ -168,24 +169,14 @@ namespace RaceLib
 
         public void Initialize()
         {
-            Dictionary<int, float> indexDistance2 = new Dictionary<int, float>();
-
-            foreach (ITimingSystem timingSystem in TimingSystemManager.TimingSystems)
-            {
-                int index = TimingSystemManager.GetIndex(timingSystem);
-                indexDistance2.Add(index, timingSystem.Settings.SectorLengthMeters);
-            }
-
-            HasDistance = indexDistance2.Values.Any(a => a > 0);
-
-            timingSystemIndexDistance = indexDistance2;
+            DistanceManager.Initialize(EventManager, TimingSystemManager, RaceManager.EventManager.FlightPath);
 
             Update();
         }
 
         public float GetSpeed(Race race, Detection detection)
         {
-            if (!HasDistance)
+            if (!DistanceManager.HasDistance)
                 return 0;
 
             Split split = race.GetSplit(detection);
@@ -194,19 +185,19 @@ namespace RaceLib
 
         public float GetSpeed(Split split)
         {
-            if (!HasDistance)
+            if (!DistanceManager.HasDistance)
                 return 0;
 
             if (split == null)
                 return 0;
 
-            if (timingSystemIndexDistance == null)
+            if (DistanceManager == null)
                 return 0;
 
             if (split.Time == TimeSpan.Zero)
                 return 0;
 
-            if (timingSystemIndexDistance.TryGetValue(split.Detection.TimingSystemIndex, out float distance))
+            if (DistanceManager.GetDistance(split, out float distance))
             {
                 if (distance > 0)
                 {
@@ -228,6 +219,15 @@ namespace RaceLib
             foreach (Split split in splits)
             {
                 yield return GetSpeed(split);
+            }
+        }
+
+        public IEnumerable<float> GetDistances(IEnumerable<Split> splits)
+        {
+            foreach (Split split in splits)
+            {
+                DistanceManager.GetDistance(split, out float distance);
+                yield return distance;
             }
         }
 
@@ -264,7 +264,7 @@ namespace RaceLib
         public bool GetBestSpeed(Pilot pilot, out Split split, out float speed, out bool overalBest)
         {
             SpeedRecord speedRecord;
-            if (HasDistance && speedRecords.TryGetValue(pilot, out speedRecord))
+            if (DistanceManager.HasDistance && speedRecords.TryGetValue(pilot, out speedRecord))
             {
                 split = speedRecord.Split;
                 speed = speedRecord.Speed;
@@ -280,6 +280,42 @@ namespace RaceLib
             return false;
         }
 
+        public float GetFastestSpeed(Race race, Pilot p)
+        {
+            IEnumerable<float> speeds = GetSpeeds(race.GetSplits(p));
+            if (speeds.Any())
+            {
+                return speeds.Max();
+            }
+            return 0;
+        }
+
+        public float GetAverageSpeed(Race race, Pilot p)
+        {
+            IEnumerable<Split> splits = race.GetSplits(p);
+            IEnumerable<float> distances = GetDistances(splits);
+            if (distances.Any())
+            {
+                float total = distances.Sum();
+                TimeSpan time = splits.Select(r => r.Time).Max();
+
+
+                float metersPerSecond = (float)(total / time.TotalSeconds);
+                return metersPerSecond;
+            }
+            return 0;
+        }
+
+        internal float GetDistance(Race race, Pilot p)
+        {
+            IEnumerable<Split> splits = race.GetSplits(p);
+            IEnumerable<float> distances = GetDistances(splits);
+            if (distances.Any())
+            {
+                return distances.Sum();
+            }
+            return 0;
+        }
 
         private struct SpeedRecord
         {

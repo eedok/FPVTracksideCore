@@ -61,7 +61,7 @@ namespace Composition.Nodes
 
         public override bool Contains(Point point)
         {
-            return Bounds.Contains(point);
+            return BoundsF.Contains(point);
         }
 
         public void Update(GameTime gameTime)
@@ -145,6 +145,9 @@ namespace Composition.Nodes
         {
             bool control = CompositorLayer.InputEventFactory.AreControlKeysDown();
 
+            if (Text == null)
+                Text = "";
+
             if (inputEvent.ButtonState == ButtonStates.Pressed || inputEvent.ButtonState == ButtonStates.Repeat)
             {
                 int activeIndex = cursorIndex;
@@ -156,7 +159,6 @@ namespace Composition.Nodes
                 string before = Text.Substring(0, activeIndex);
                 string after = Text.Substring(before.Length);
 
-
                 string input = "";
                 char c = inputEvent.GetChar();
 
@@ -165,13 +167,13 @@ namespace Composition.Nodes
                     if (inputEvent.Key == Keys.V)
                     {
                         input = PlatformTools.Clipboard.GetText();
+                        cursorIndex = input.Length;
                     }
                 }
                 else if (c != 0)
                 {
                     input += c;
                 }
-
 
                 if (!string.IsNullOrEmpty(input))
                 {
@@ -225,6 +227,14 @@ namespace Composition.Nodes
                     case Keys.End:
                         cursorIndex = Text.Length;
                         break;
+
+                    case Keys.Up:
+                        AddValue(1);
+                        break;
+
+                    case Keys.Down:
+                        AddValue(-1);
+                        break;
                 }
                 RequestRedraw();
                 TextChanged?.Invoke(Text);
@@ -232,6 +242,26 @@ namespace Composition.Nodes
             }
 
             return base.OnKeyboardInput(inputEvent);
+        }
+
+        public void AddValue(int add)
+        {
+            if (text.Contains("."))
+            {
+                if (double.TryParse(text, out double result))
+                {
+                    result += add;
+                    Text = result.ToString();
+                }
+            }
+            else
+            {
+                if (int.TryParse(text, out int result))
+                {
+                    result += add;
+                    Text = result.ToString();
+                }
+            }
         }
 
         public int HitCharacterIndex(MouseInputEvent mouseInputEvent)

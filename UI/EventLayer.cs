@@ -17,6 +17,7 @@ using Webb;
 using UI.Sponsor;
 using System.IO;
 using UI.Nodes.Rounds;
+using Composition;
 
 namespace UI
 {
@@ -26,7 +27,7 @@ namespace UI
 
         public ControlButtonsNode ControlButtons { get; private set; }
 
-        private VideoManager videoManager;
+        protected VideoManager videoManager;
 
         protected PilotListNode pilotList;
         public MenuButton MenuButton { get; private set; }
@@ -49,7 +50,7 @@ namespace UI
         private TopBarNode topBar;
         private AspectNode centralAspectNode;
         private AnimatedNode rightBar;
-        private TabButtonsNode tabButtonsNode;
+        protected TabButtonsNode tabButtonsNode;
         private TextButtonNode pilotListButton;
 
         private float rightBarWidth = 0.035f;
@@ -61,11 +62,18 @@ namespace UI
         private WorkQueue workQueueStartRace;
 
         private SystemStatusNode systemStatusNode;
+        
+        private DateTime videoCheckEnd;
+        private bool hasReportedNoVideo;
+
         public KeyboardShortcuts KeyMapper { get; private set; }
 
         public OBSRemoteControlManager OBSRemoteControlManager { get; private set; }
 
         public AutoRunner AutoRunner { get; private set; }
+
+        public AutoCrashOut AutoCrashOut { get { return ChannelsGridNode.AutoCrashOut; } }
+
 
         public Profile Profile
         {
@@ -75,10 +83,14 @@ namespace UI
             }
         }
 
-        public EventLayer(BaseGame game, GraphicsDevice graphicsDevice, EventManager eventManager)
+        public GlobalInterceptKeys GlobalInterceptKeys { get; private set; }
+
+        public EventLayer(BaseGame game, GraphicsDevice graphicsDevice, EventManager eventManager, PlatformTools platformTools)
             : base(graphicsDevice)
         {
-            DirectoryInfo eventDirectory = new DirectoryInfo(Path.Combine(GeneralSettings.Instance.EventStorageLocation, eventManager.Event.ID.ToString()));
+
+            DirectoryInfo eventDirectory = new DirectoryInfo(Path.Combine(ApplicationProfileSettings.Instance.EventStorageLocation, eventManager.Event.ID.ToString()));
+
 
             workQueueStartRace = new WorkQueue("Event Layer - Start Race");
 
@@ -87,14 +99,14 @@ namespace UI
             EventManager = eventManager;
             EventManager.SetChannelColors(Theme.Current.ChannelColors.XNA());
 
-            RaceStringFormatter.Instance.Practice = ProfileSettings.Instance.Practice;
-            RaceStringFormatter.Instance.TimeTrial = ProfileSettings.Instance.TimeTrial;
-            RaceStringFormatter.Instance.Race = ProfileSettings.Instance.Race;
-            RaceStringFormatter.Instance.Freestyle = ProfileSettings.Instance.Freestyle;
-            RaceStringFormatter.Instance.Endurance = ProfileSettings.Instance.Endurance;
-            RaceStringFormatter.Instance.CasualPractice = ProfileSettings.Instance.CasualPractice;
+            RaceStringFormatter.Instance.Practice = ApplicationProfileSettings.Instance.Practice;
+            RaceStringFormatter.Instance.TimeTrial = ApplicationProfileSettings.Instance.TimeTrial;
+            RaceStringFormatter.Instance.Race = ApplicationProfileSettings.Instance.Race;
+            RaceStringFormatter.Instance.Freestyle = ApplicationProfileSettings.Instance.Freestyle;
+            RaceStringFormatter.Instance.Endurance = ApplicationProfileSettings.Instance.Endurance;
+            RaceStringFormatter.Instance.CasualPractice = ApplicationProfileSettings.Instance.CasualPractice;
 
-            EventManager.RaceManager.RemainingTimesToAnnounce = ProfileSettings.Instance.RemainingSecondsToAnnounce;
+            EventManager.RaceManager.RemainingTimesToAnnounce = ApplicationProfileSettings.Instance.RemainingSecondsToAnnounce;
 
             // Init the videos into the video directories.
             VideoManagerFactory.Init(eventDirectory.FullName, eventManager.Profile);
@@ -103,10 +115,10 @@ namespace UI
             videoManager.AutoPause = true;
 
             SoundManager = new SoundManager(EventManager, eventManager.Profile);
-            SoundManager.MuteTTS = !ProfileSettings.Instance.TextToSpeech;
-            SoundManager.SillyNameChance = ProfileSettings.Instance.SillyNameChance;
-            SoundManager.Units = GeneralSettings.Instance.Units;
-            SoundManager.PilotAnnounceTime = TimeSpan.FromSeconds(ProfileSettings.Instance.PilotProfileHoldLengthSeconds);
+            SoundManager.MuteTTS = !ApplicationProfileSettings.Instance.TextToSpeech;
+            SoundManager.SillyNameChance = ApplicationProfileSettings.Instance.SillyNameChance;
+            SoundManager.Units = ApplicationProfileSettings.Instance.Units;
+            SoundManager.PilotAnnounceTime = TimeSpan.FromSeconds(ApplicationProfileSettings.Instance.PilotProfileHoldLengthSeconds);
 
             KeyMapper = KeyboardShortcuts.Read(Profile);
 
@@ -152,7 +164,7 @@ namespace UI
             Root.AddChild(topBar);
 
             rightBar = new AnimatedNode();
-            rightBar.SetAnimationTime(TimeSpan.FromSeconds(ProfileSettings.Instance.ReOrderAnimationSeconds));
+            rightBar.SetAnimationTime(TimeSpan.FromSeconds(ApplicationProfileSettings.Instance.ReOrderAnimationSeconds));
 
             centralAspectNode = new AspectNode();
             centralAspectNode.SetAspectRatio(16, 9);
@@ -199,7 +211,7 @@ namespace UI
             pilotListButton.OnClick += TogglePilotList;
             OnPilotRefresh();
 
-            TabbedMultiNode = new TracksideTabbedMultiNode(eventManager, videoManager, SoundManager, RoundsNode, sceneManagerNode, tabButtonsNode, KeyMapper);
+            TabbedMultiNode = CreateTabNode();
             TabbedMultiNode.RelativeBounds = new RectangleF(0, 0, 1, 0.99f);
             TabbedMultiNode.OnTabChange += OnTabChange;
             centreContainer.AddChild(TabbedMultiNode);
@@ -211,13 +223,13 @@ namespace UI
 
             topBar.Init(EventManager, TabbedMultiNode.ReplayNode);
             topBar.TabContainer.AddChild(tabButtonsNode);
-            TabbedMultiNode.Init();
+            TabbedMultiNode.Init(platformTools);
 
             ControlButtons = new ControlButtonsNode(EventManager, ChannelsGridNode, TabbedMultiNode, AutoRunner);
             ControlButtons.RelativeBounds = new RectangleF(0, 0.0f, 1, 1);
             rightBar.AddChild(ControlButtons);
 
-            ControlButtons.StartButton.OnClick += (mie) => { StartRace(); };
+            ControlButtons.StartButton.OnClick += (mie) => { StartRaceWithVideoCheck(); };
             ControlButtons.StopButton.OnClick += (mie) => { StopRace(); };
             ControlButtons.ClearButton.OnClick += (mie) => { Clear(); };
             ControlButtons.NextButton.OnClick += NextButton_OnClick;
@@ -239,18 +251,18 @@ namespace UI
 
             ControlButtons.CopyResultsClipboard.OnClick += (mie) =>
             {
-                PlatformTools.Clipboard.SetText(EventManager.GetResultsText());
+                PlatformTools.Clipboard.SetText(EventManager.GetResultsText(ApplicationProfileSettings.Instance.Units));
             };
 
             IRaceControl raceControl = null;
-            if (GeneralSettings.Instance.HTTPServerRaceControl)
+            if (ApplicationProfileSettings.Instance.HTTPServerRaceControl)
             {
                 raceControl = this;
             }
 
             eventWebServer = new EventWebServer(EventManager, SoundManager, raceControl, Theme.Current.ChannelColors);
 
-            if (GeneralSettings.Instance.HTTPServer)
+            if (ApplicationProfileSettings.Instance.HTTPServer)
             {
                 eventWebServer.Start();
             }
@@ -286,12 +298,7 @@ namespace UI
                 }
                 sceneManagerNode.SetScene(sceneManagerNode.Scene, true);
             };
-            MenuButton.EventChanged += () =>
-            {
-                topBar.UpdateDetails();
-                pilotList.RebuildList();
-            };
-
+            MenuButton.EventEditor += EventEditor;
             MenuButton.DataDeleted += () =>
             {
                 pilotList.RebuildList();
@@ -332,15 +339,51 @@ namespace UI
 
             ControlButtons.UpdateControlButtons();
 
-            if (ProfileSettings.Instance.NotificationEnabled)
+            if (ApplicationProfileSettings.Instance.NotificationEnabled)
             {
-                RemoteNotifier = new RemoteNotifier(EventManager, ProfileSettings.Instance.NotificationURL, ProfileSettings.Instance.NotificationSerialPort);
+                RemoteNotifier = new RemoteNotifier(EventManager, ApplicationProfileSettings.Instance.NotificationURL, ApplicationProfileSettings.Instance.NotificationSerialPort);
             }
 
 
             ReloadOBSRemoteControl();
 
             SoundManager.OnHighlightPilot += sceneManagerNode.FullScreen;
+
+            GlobalInterceptKeys = GlobalInterceptKeys.Instance;
+
+            ShortcutKey[] globals = new ShortcutKey[] { KeyMapper.GlobalCopyResults, KeyMapper.GlobalStartStopRace, KeyMapper.GlobalNextRace, KeyMapper.GlobalPrevRace };
+            GlobalInterceptKeys.AddListen(globals.GetKeys().Distinct());
+
+            GlobalInterceptKeys.OnKeyPress += GlobalInterceptKeys_OnChange;
+        }
+
+        protected virtual void EventEditor()
+        {
+            EventEditor editor = new EventEditor(EventManager.Event);
+            ShowEventEditor(editor);
+        }
+
+        protected void ShowEventEditor(EventEditor editor)
+        {
+            LayerStack.GetLayer<PopupLayer>().Popup(editor);
+
+            editor.OnOK += (e) =>
+            {
+                EventManager.Event = editor.Objects.FirstOrDefault();
+                using (IDatabase db = DatabaseFactory.Open(EventManager.EventId))
+                {
+                    db.Update(EventManager.Event);
+                }
+
+                topBar.UpdateDetails();
+                pilotList.RebuildList();
+                ControlButtons.UpdateControlButtons();
+            };
+        }
+
+        public virtual TracksideTabbedMultiNode CreateTabNode()
+        {
+            return new TracksideTabbedMultiNode(EventManager, videoManager, SoundManager, RoundsNode, sceneManagerNode, tabButtonsNode, KeyMapper);
         }
 
         private void TakePhoto(MouseInputEvent mie, Pilot p)
@@ -437,6 +480,7 @@ namespace UI
             OBSRemoteControlManager?.Dispose();
 
             eventWebServer?.Dispose();
+            GlobalInterceptKeys.Reset();
 
             base.Dispose();
         }
@@ -479,7 +523,7 @@ namespace UI
         public void NextRace(bool unfinishedOnly)
         {
             SponsorLayer sponsorLayer = LayerStack.GetLayer<SponsorLayer>();
-            if (sponsorLayer != null && GeneralSettings.Instance.SponsoredByMessages)
+            if (sponsorLayer != null && ApplicationProfileSettings.Instance.SponsoredByMessages)
             {
                 sponsorLayer.TriggerMaybe(() => 
                 {
@@ -495,7 +539,7 @@ namespace UI
         private bool RecoverRace(Race toRecover)
         {
             bool recoveredRace = EventManager.RaceManager.ResumeRace(toRecover);
-            if (recoveredRace && ProfileSettings.Instance.AutoHideShowPilotList)
+            if (recoveredRace && ApplicationProfileSettings.Instance.AutoHideShowPilotList)
             {
                 ShowPilotList(false);
                 TabbedMultiNode.ShowLive();
@@ -542,7 +586,7 @@ namespace UI
         public override void SetLayerStack(LayerStack layerStack)
         {
             base.SetLayerStack(layerStack);
-            UpdateCrop(ProfileSettings.Instance.CropContent16by9);
+            UpdateCrop(ApplicationProfileSettings.Instance.CropContent16by9);
 
             SponsorLayer sponsor = LayerStack.GetLayer<SponsorLayer>();
             if (sponsor != null)
@@ -552,7 +596,7 @@ namespace UI
 
             if (SoundManager != null)
             {
-                SoundManager.SetupSpeaker(PlatformTools, ProfileSettings.Instance.Voice, ProfileSettings.Instance.TextToSpeechVolume);
+                SoundManager.SetupSpeaker(PlatformTools, ApplicationProfileSettings.Instance.Voice, ApplicationProfileSettings.Instance.TextToSpeechVolume);
             }
         }
 
@@ -623,6 +667,86 @@ namespace UI
             base.OnUpdate(gameTime);
             EventManager?.Update(gameTime);
             AutoRunner?.Update();
+
+            if (ApplicationProfileSettings.Instance.AutoRaceStartVideoCheck)
+            {
+                UpdateAutoVideoCheck();
+            }
+        }
+
+        protected void UpdateAutoVideoCheck()
+        {
+            if (sceneManagerNode != null) 
+            {
+                if (sceneManagerNode.Scene == SceneManagerNode.Scenes.VideoCheck)
+                {
+                    Race race = EventManager.RaceManager.CurrentRace;
+                    if (race != null) 
+                    {
+                        bool allFine = true;
+                        Channel badChannel = Channel.None;
+
+                        foreach (Channel channel in race.Channels)
+                        {
+                            if (!AutoCrashOut.HasMotion(channel))
+                            {
+                                badChannel = channel;
+                                allFine = false;
+                            }
+                        }
+
+                        if (allFine) 
+                        {
+                            sceneManagerNode.SetScene(SceneManagerNode.Scenes.PreRace);
+
+                            if (hasReportedNoVideo)
+                            {
+                                SoundManager.PlayVideoOk(() => { StartRace(); });
+                            }
+                            else
+                            {
+                                StartRace();
+                            }
+                        }
+                        else
+                        {
+                            if (DateTime.Now > videoCheckEnd)
+                            {
+                                Pilot p = race.GetPilot(badChannel);
+                                if (p != null)
+                                {
+                                    SoundManager.PlayVideoIssuesDelayRace(p);
+                                }
+                                videoCheckEnd = DateTime.Now + TimeSpan.FromSeconds(ApplicationProfileSettings.Instance.AutoRaceStartVideoCheckAnnouncementSeconds);
+                                hasReportedNoVideo = true;
+                            }
+                        }
+                    }
+                }
+            } 
+        }
+
+        private void GlobalInterceptKeys_OnChange()
+        {
+            if (GlobalInterceptKeys.Match(KeyMapper.GlobalStartStopRace))
+            {
+                StartStopNext();
+            }
+
+            if (GlobalInterceptKeys.Match(KeyMapper.GlobalNextRace))
+            {
+                NextRace(false);
+            }
+
+            if (GlobalInterceptKeys.Match(KeyMapper.GlobalPrevRace))
+            {
+                EventManager.RaceManager.PrevRace();
+            }
+
+            if (GlobalInterceptKeys.Match(KeyMapper.GlobalCopyResults))
+            {
+                PlatformTools.Clipboard.SetText(EventManager.GetResultsText(ApplicationProfileSettings.Instance.Units));
+            }
         }
 
         protected override void OnDraw()
@@ -712,7 +836,7 @@ namespace UI
                 return false;
             }
 
-            if (ProfileSettings.Instance.AutoHideShowPilotList)
+            if (ApplicationProfileSettings.Instance.AutoHideShowPilotList)
             {
                 ShowPilotList(false);
                 TabbedMultiNode.ShowLive();
@@ -722,13 +846,13 @@ namespace UI
 
             videoManager.StartRecording(race);
 
-            bool staggeredStart = ProfileSettings.Instance.TimeTrialStaggeredStart && EventManager.RaceManager.RaceType == EventTypes.TimeTrial;
+            bool staggeredStart = ApplicationProfileSettings.Instance.TimeTrialStaggeredStart && EventManager.RaceManager.RaceType == EventTypes.TimeTrial;
 
             bool delayedStart = (EventManager.Event.MinStartDelay + EventManager.Event.MaxStartDelay).TotalSeconds > 0 && EventManager.RaceManager.RaceType.HasDelayedStart();
 
             if (staggeredStart)
             {
-                TimeSpan staggeredTime = TimeSpan.FromSeconds(ProfileSettings.Instance.StaggeredStartDelaySeconds);
+                TimeSpan staggeredTime = TimeSpan.FromSeconds(ApplicationProfileSettings.Instance.StaggeredStartDelaySeconds);
                 if (!EventManager.RaceManager.PreRaceStart())
                 {
                     EventManager.RaceManager.CancelRaceStart(true);
@@ -739,6 +863,9 @@ namespace UI
                 {
                     wait.Set();
                 });
+
+                if (workQueueStartRace.QueueLength > 0)
+                    return false;
 
                 workQueueStartRace.Enqueue(() =>
                 {
@@ -756,6 +883,9 @@ namespace UI
             }
             else if (delayedStart)
             {
+                if (workQueueStartRace.QueueLength > 0)
+                    return false;
+
                 workQueueStartRace.Enqueue(() =>
                 {
                     bool failed = false;
@@ -785,6 +915,9 @@ namespace UI
             }
             else
             {
+                if (workQueueStartRace.QueueLength > 0)
+                    return false;
+
                 workQueueStartRace.Enqueue(() =>
                 {
                     EventManager.RaceManager.PreRaceStart();
@@ -817,7 +950,7 @@ namespace UI
         public void Clear()
         {
             SoundManager.StopSound();   
-            if (ProfileSettings.Instance.AutoHideShowPilotList)
+            if (ApplicationProfileSettings.Instance.AutoHideShowPilotList)
             {
                 ShowPilotList(true);
             }
@@ -887,22 +1020,7 @@ namespace UI
 
                 if (KeyMapper.StartStopRace.Match(inputEvent))
                 {
-                    if (TabbedMultiNode.IsOnLive)
-                    {
-                        if (ControlButtons.StopButton.Visible)
-                        {
-                            StopRace();
-                        }
-                        else if (ControlButtons.StartButton.Visible)
-                        {
-                            StartRace();
-                        }
-                        else if (sceneManagerNode.Scene == SceneManagerNode.Scenes.RaceResults)
-                        {
-                            NextRace(false);
-                        }
-                    }
-
+                    StartStopNext();
                     return true;
                 }
 
@@ -1130,7 +1248,7 @@ namespace UI
                         {
                             if (ControlButtons.CopyResultsClipboard.Visible)
                             {
-                                PlatformTools.Clipboard.SetText(EventManager.GetResultsText());
+                                PlatformTools.Clipboard.SetText(EventManager.GetResultsText(ApplicationProfileSettings.Instance.Units));
                             }
                         }
                         else
@@ -1158,24 +1276,73 @@ namespace UI
             return false;
         }
 
+        private void StartStopNext()
+        {
+            if (TabbedMultiNode.IsOnLive)
+            {
+                if (ControlButtons.StopButton.Visible)
+                {
+                    StopRace();
+                }
+                else if (ControlButtons.StartButton.Visible)
+                {
+                    if (sceneManagerNode.Scene == SceneManagerNode.Scenes.PreRace && ApplicationProfileSettings.Instance.AutoRaceStartVideoCheck)
+                    {
+                        VideoCheck();
+                    }
+                    else
+                    { 
+                        StartRace();
+                    }
+                }
+                else if (sceneManagerNode.Scene == SceneManagerNode.Scenes.RaceResults)
+                {
+                    NextRace(false);
+                }
+            }
+        }
+
+
+        private void StartRaceWithVideoCheck()
+        {
+            if (sceneManagerNode.Scene == SceneManagerNode.Scenes.PreRace && ApplicationProfileSettings.Instance.AutoRaceStartVideoCheck)
+            {
+                VideoCheck();
+            }
+            else
+            {
+                StartRace();
+            }
+        }
+
+
+        private void VideoCheck()
+        {
+            if (sceneManagerNode == null)
+                return;
+
+            videoCheckEnd = DateTime.Now + TimeSpan.FromSeconds(ApplicationProfileSettings.Instance.AutoRaceStartVideoCheckAnnouncementSeconds);
+            hasReportedNoVideo = false;
+            sceneManagerNode.SetScene(SceneManagerNode.Scenes.VideoCheck);
+            SoundManager.PlayEnableVideo();
+        }
+
         private void OnTabChange(string tab, Node s)
         {
             ControlButtons.UpdateControlButtons(); 
-            if (ProfileSettings.Instance.AutoHideShowPilotList)
+            if (ApplicationProfileSettings.Instance.AutoHideShowPilotList)
             {
                 if (TabbedMultiNode.IsOnLive)
                 {
                     ShowPilotList(!EventManager.RaceManager.HasPilots);
                 }
-
-                if (TabbedMultiNode.IsOnPhotoBooth)
+                else if (TabbedMultiNode.IsOnPhotoBooth || TabbedMultiNode.IsOnRounds)
                 {
                     ShowPilotList(true);
                 }
-
-                if (TabbedMultiNode.IsOnRounds)
-                {
-                    ShowPilotList(true);
+                else
+                { 
+                    ShowPilotList(false);
                 }
             }
 
